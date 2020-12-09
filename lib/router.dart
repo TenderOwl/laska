@@ -18,12 +18,12 @@ class Node {
 }
 
 class Route {
-  String method = 'GET';
+  String method;
   String path;
-  Map<String, dynamic> data;
   Function handler;
+  Map<Symbol, dynamic> params;
 
-  Route(this.path, this.data, this.handler);
+  Route(this.method, this.path, this.handler, {this.params});
 }
 
 class Router {
@@ -89,15 +89,18 @@ class Router {
     }
   }
 
-  Map<String, dynamic> lookup(String path) {
+  Route lookup(String path) {
     path = validateInput(path);
     // optimization, if a route is static and does not have any
     // variable sections, retrieve from a static routes map
     if (staticRoutesMap.containsKey(path)) {
-      return staticRoutesMap[path].data;
+      final staticRoute = staticRoutesMap[path];
+      return Route(staticRoute.method, path, staticRoute.handler);
     }
 
-    return findNode(path, rootNode);
+    final nodeMap = findNode(path, rootNode);
+    return Route(nodeMap['node']?.method, path, nodeMap['node']?.handler,
+        params: nodeMap['params']);
   }
 
   String validateInput(String path) {

@@ -23,14 +23,31 @@ class Laska {
   void handleRequest(HttpServer server) async {
     await for (HttpRequest request in server) {
       var route = router.lookup(request.uri.path);
-      if (route['node']?.handler != null) {
-        Function.apply(route['node'].handler, [request], route['params']);
+
+      if (route?.handler != null) {
+        try {
+          Function.apply(route.handler, [request], route.params);
+        } catch (exception) {
+          print('EXCEPTION: $exception');
+          await sendInternalError(request.response);
+        }
       } else {
-        request.response.write('Not Found');
+        await sendNotFound(request.response);
       }
 
       await request.response.close();
     }
+  }
+
+  void sendInternalError(HttpResponse response) async {
+    response.statusCode = HttpStatus.internalServerError;
+    await response.close();
+  }
+
+  void sendNotFound(HttpResponse response) async {
+    response.statusCode = HttpStatus.notFound;
+    response.write('Not Found');
+    await response.close();
   }
 
   void GET(String path, Function handler) {

@@ -6,7 +6,8 @@ void main() async {
   final laska = Laska();
 
   laska.GET('/users/:userId', (request, {dynamic userId}) {
-    request.response.write('GET: ${request.uri.path} |> $userId [$userId.runtimeType]');
+    request.response
+        .write('GET: ${request.uri.path} |> $userId [$userId.runtimeType]');
   });
 
   laska.GET('/users/new', (request) {
@@ -24,4 +25,5 @@ void main() async {
 
 void authHandler(HttpRequest request, {String userId}) async {
   request.response.write('authHandler: ${request.uri.path} |> $userId');
+  // throw Exception('Throw an Error');
 }
