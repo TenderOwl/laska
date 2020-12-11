@@ -1,60 +1,88 @@
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:laska/router.dart';
+import 'package:laska/server.dart';
+import 'package:laska/config.dart';
 
 class Laska {
-  String address;
-  final int port;
-  var router = Router();
+  Configuration config;
 
-  Laska({this.address = '0.0.0.0', this.port = 3789});
-
-  void run() async {
-    final server = await createServer();
-    print('Server started: ${server.address} port ${server.port}');
-    await handleRequest(server);
+  Laska(
+      {this.config,
+      String address = '0.0.0.0',
+      int port = 3789,
+      int isolateCount,
+      Router router}) {
+    // Init configuration
+    config ??= Configuration()
+      ..address = address ?? 'localhost'
+      ..port = port ?? 3788
+      ..isolatesCount = isolateCount ?? Platform.numberOfProcessors
+      ..router = router ?? Router();
   }
 
-  Future<HttpServer> createServer() async {
-    // final address = InternetAddress.loopbackIPv4;
-    return await HttpServer.bind(address, port);
-  }
-
-  void handleRequest(HttpServer server) async {
-    await for (HttpRequest request in server) {
-      var route = router.lookup(request.uri.path);
-
-      if (route?.handler != null) {
-        try {
-          Function.apply(route.handler, [request], route.params);
-        } catch (exception) {
-          print('EXCEPTION: $exception');
-          await sendInternalError(request.response);
-        }
-      } else {
-        await sendNotFound(request.response);
-      }
-
-      await request.response.close();
-    }
-  }
-
-  void sendInternalError(HttpResponse response) async {
-    response.statusCode = HttpStatus.internalServerError;
-    await response.close();
-  }
-
-  void sendNotFound(HttpResponse response) async {
-    response.statusCode = HttpStatus.notFound;
-    response.write('Not Found');
-    await response.close();
-  }
+  // API to user laska.router object
+  Router get router => config.router;
+  set router(Router router) => config.router = router;
 
   void GET(String path, Function handler) {
-    router.insert('GET', path, handler);
+    handle('GET', path, handler);
   }
 
   void POST(String path, Function handler) {
-    router.insert('POST', path, handler);
+    handle('POST', path, handler);
   }
+
+  void PUT(String path, Function handler) {
+    handle('PUT', path, handler);
+  }
+
+  void DELETE(String path, Function handler) {
+    handle('DELETE', path, handler);
+  }
+
+  void handle(String method, String path, Function handler) {
+    config.router.insert(method, path, handler);
+  }
+}
+
+Future<void> run(Laska app) async {
+  // config.router = router;
+
+  // Store out workers
+  var workers = <Worker>[];
+
+  for (var i = 0; i < app.config.isolatesCount - 1; i++) {
+    // Init worker and store its communication ports
+    var receiverPort = ReceivePort();
+    var iso = await Isolate.spawn(_startServer, receiverPort.sendPort);
+    var sendPort = await receiverPort.first;
+
+    sendPort.send(app);
+    workers.add(Worker()
+      ..receivePort = receiverPort
+      ..sendPort = sendPort
+      ..isolate = iso);
+  }
+
+  var receivePort = ReceivePort();
+  await _startServer(receivePort.sendPort);
+  var sendPort = (await receivePort.first as SendPort);
+  sendPort.send(app);
+}
+
+void _startServer(SendPort sendPort) async {
+  var receivePort = ReceivePort();
+  sendPort.send(receivePort.sendPort);
+
+  var server;
+  receivePort.listen((message) async {
+    // If we've got a message with configuration
+    // then start a server to listen connections
+    if (message is Laska) {
+      server = Server(message.config);
+      await server.run();
+    }
+  });
 }

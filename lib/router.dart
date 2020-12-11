@@ -160,4 +160,24 @@ class Router {
 
     return {'node': node, 'params': paramsFound ? params : null};
   }
+
+  void GET(String path, Function handler) {
+    custom('GET', path, handler);
+  }
+
+  void POST(String path, Function handler) {
+    custom('POST', path, handler);
+  }
+
+  void PUT(String path, Function handler) {
+    custom('PUT', path, handler);
+  }
+
+  void DELETE(String path, Function handler) {
+    custom('DELETE', path, handler);
+  }
+
+  void custom(String method, String path, Function handler) {
+    insert(method, path, handler);
+  }
 }
