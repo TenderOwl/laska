@@ -1,8 +1,16 @@
 # Laska
 
-## Microframework for web development for Dart
+Laska is a server-side microframework for [Dart](https://dart.dev/).
 
-Currently, in development, not for production use.
+Currently, in development, **not for production use**.
+
+## Summary
+
+- [x] Dynamic routing with placeholders and wildcards
+- [x] Concurrency via [Isolates](https://api.dart.dev/stable/2.10.4/dart-isolate/Isolate-class.html)
+- [ ] Extensible Middleware support
+- [ ] Template rendering
+- [ ] Logging
 
 ## Example
 
@@ -31,3 +39,7 @@ void createUser(HttpRequest request, {String userId}) async {
   request.response.write('New user created');
 }
 ```
+
+## License
+
+[MIT](https://github.com/amka/laska/blob/master/LICENSE)

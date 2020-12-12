@@ -70,6 +70,9 @@ Future<void> run(Laska app) async {
   await _startServer(receivePort.sendPort);
   var sendPort = (await receivePort.first as SendPort);
   sendPort.send(app);
+
+  print('=> http server started on '
+      '${app.config.address}:${app.config.port}');
 }
 
 void _startServer(SendPort sendPort) async {
