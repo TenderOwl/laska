@@ -28,17 +28,22 @@ class Server {
   }
 
   void handleRequest(HttpRequest request) async {
+    var context = Context(request);
     var route = router.lookup(request.uri.path);
 
-    var context = Context(request);
-
+    // Check if route has a handler
     if (route?.handler != null) {
-      try {
-        context.route = route;
-        Function.apply(route.handler, [context]);
-      } catch (exception) {
-        print('EXCEPTION: $exception');
-        await sendInternalError(context);
+      // Check if route use the same method as requested
+      if (route?.method != request.method) {
+        await sendMethodNotAllowed(context);
+      } else {
+        try {
+          context.route = route;
+          await route.handler(context);
+        } catch (exception) {
+          print('EXCEPTION: $exception');
+          await sendInternalError(context);
+        }
       }
     } else {
       await sendNotFound(context);
@@ -55,5 +60,10 @@ class Server {
 
   void sendNotFound(Context context) async {
     await context.Text('Not Found', statusCode: HttpStatus.notFound);
+  }
+
+  void sendMethodNotAllowed(Context context) async {
+    await context.Text('Method Not Allowed',
+        statusCode: HttpStatus.methodNotAllowed);
   }
 }
