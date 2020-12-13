@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:laska/middleware/basic_auth.dart';
+import 'package:laska/middleware/middleware.dart';
 import 'package:laska/router.dart';
 
 /// Stores [Laska] configuration.
@@ -14,4 +16,6 @@ class Configuration {
 
   /// The Router object filled with routes.
   Router router;
+
+  List<Middleware> middleware;
 }

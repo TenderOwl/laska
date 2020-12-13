@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:laska/middleware/middleware.dart';
 import 'package:laska/router.dart';
 import 'package:laska/server.dart';
 import 'package:laska/config.dart';
@@ -19,11 +20,13 @@ class Laska {
       ..address = address ?? 'localhost'
       ..port = port ?? 3788
       ..isolatesCount = isolateCount ?? Platform.numberOfProcessors
+      ..middleware = <Middleware>[]
       ..router = router ?? Router();
   }
 
   // API to user laska.router object
   Router get router => config.router;
+
   set router(Router router) => config.router = router;
 
   void GET(String path, Function handler) {
@@ -44,6 +47,12 @@ class Laska {
 
   void handle(String method, String path, Function handler) {
     config.router.insert(method, path, handler);
+  }
+
+  void Use(Middleware middleware) {
+    if (!config.middleware.contains(middleware)) {
+      config.middleware.add(middleware);
+    }
   }
 }
 

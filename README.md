@@ -8,7 +8,7 @@ Currently, in development, **not for production use**.
 
 - [x] Dynamic routing with placeholders and wildcards
 - [x] Concurrency via [Isolates](https://api.dart.dev/stable/2.10.4/dart-isolate/Isolate-class.html)
-- [ ] Extensible Middleware support
+- [x] Extensible Middleware support
 - [ ] Template rendering
 - [ ] Logging
 
@@ -22,6 +22,9 @@ import 'package:laska/laska.dart';
 void main() async {
   // Create new Laska object with 2 [Isolate]
   final laska = Laska(isolateCount: 2);
+
+  // Set global BasicAuth middleware 
+  laska.Use(BasicAuth('laska', 'ermine', realm: 'Access to private zone'));
 
   laska.GET('/users/:userId', getUserById);
   laska.POST('/users/', createUser);

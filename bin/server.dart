@@ -2,10 +2,13 @@ import 'dart:io';
 
 import 'package:laska/context.dart';
 import 'package:laska/laska.dart';
+import 'package:laska/middleware/basic_auth.dart';
 
 void main() async {
   // Create new Laska object with 2 [Isolate]
   final laska = Laska(isolateCount: 1);
+
+  laska.Use(BasicAuth('laska', 'ermine', realm: 'Access to private zone'));
 
   laska.GET('/users/:userId', getUserById);
   laska.POST('/users/', createUser);
