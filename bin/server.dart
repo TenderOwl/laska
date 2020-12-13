@@ -1,10 +1,11 @@
 import 'dart:io';
 
+import 'package:laska/context.dart';
 import 'package:laska/laska.dart';
 
 void main() async {
   // Create new Laska object with 2 [Isolate]
-  final laska = Laska(isolateCount: 2);
+  final laska = Laska(isolateCount: 1);
 
   laska.GET('/users/:userId', getUserById);
   laska.POST('/users/', createUser);
@@ -13,11 +14,10 @@ void main() async {
   await run(laska);
 }
 
-void getUserById(HttpRequest request, {String userId}) async {
-  request.response.write('User($userId)');
+void getUserById(Context context) async {
+  await context.HTML('<p>User: <b>${context.params['userId']}</b></p>');
 }
 
-void createUser(HttpRequest request, {String userId}) async {
-  request.response.statusCode = HttpStatus.created;
-  request.response.write('New user created');
+void createUser(Context context) async {
+  await context.JSON({'status': 'created'}, statusCode: HttpStatus.created);
 }

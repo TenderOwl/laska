@@ -1,6 +1,9 @@
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:laska/context.dart';
+import 'package:laska/router.dart';
+
 import 'config.dart';
 
 class Worker {
@@ -11,8 +14,8 @@ class Worker {
 
 class Server {
   Configuration config;
-  var server;
-  var router;
+  HttpServer server;
+  Router router;
 
   Server(this.config) {
     router = config.router;
@@ -27,29 +30,30 @@ class Server {
   void handleRequest(HttpRequest request) async {
     var route = router.lookup(request.uri.path);
 
+    var context = Context(request);
+
     if (route?.handler != null) {
       try {
-        request.response.headers.contentType = ContentType.html;
-        Function.apply(route.handler, [request], route.params);
+        context.route = route;
+        Function.apply(route.handler, [context]);
       } catch (exception) {
         print('EXCEPTION: $exception');
-        await sendInternalError(request.response);
+        await sendInternalError(context);
       }
     } else {
-      await sendNotFound(request.response);
+      await sendNotFound(context);
     }
 
     await request.response.close();
   }
 
-  void sendInternalError(HttpResponse response) async {
-    response.statusCode = HttpStatus.internalServerError;
-    await response.close();
+  void sendInternalError(Context context) async {
+    context.response.statusCode = HttpStatus.internalServerError;
+    await context.Text('Internal Server Error',
+        statusCode: HttpStatus.internalServerError);
   }
 
-  void sendNotFound(HttpResponse response) async {
-    response.statusCode = HttpStatus.notFound;
-    response.write('Not Found');
-    await response.close();
+  void sendNotFound(Context context) async {
+    await context.Text('Not Found', statusCode: HttpStatus.notFound);
   }
 }

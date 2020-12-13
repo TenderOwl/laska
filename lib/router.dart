@@ -21,7 +21,7 @@ class Route {
   String method;
   String path;
   Function handler;
-  Map<Symbol, dynamic> params;
+  Map<String, dynamic> params;
 
   Route(this.method, this.path, this.handler, {this.params});
 }
@@ -127,7 +127,7 @@ class Router {
   Map<String, dynamic> findNode(String path, Node rootNode) {
     var sections = path.split('/');
 
-    var params = <Symbol, dynamic>{};
+    var params = <String, dynamic>{};
     var paramsFound = false;
     var wildcardNode;
     var node = rootNode;
@@ -146,7 +146,7 @@ class Router {
       } else {
         node = node.placeholderChildNode;
         if (node != null) {
-          params[node.paramSymbol] = section;
+          params[node.paramName] = section;
           paramsFound = true;
         } else {
           break;

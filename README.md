@@ -30,13 +30,12 @@ void main() async {
   await run(laska);
 }
 
-void getUserById(HttpRequest request, {String userId}) async {
-  request.response.write('User($userId)');
+void getUserById(Context context) async {
+  await context.HTML('User: <b>${context.params['userId']}</b>');
 }
 
-void createUser(HttpRequest request, {String userId}) async {
-  request.response.statusCode = HttpStatus.created;
-  request.response.write('New user created');
+void createUser(Context context) async {
+  await context.JSON({'status': 'created'}, statusCode: HttpStatus.created);
 }
 ```
 
