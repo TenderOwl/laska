@@ -2,7 +2,9 @@
 
 Laska is a server-side microframework for [Dart](https://dart.dev/).
 
-Currently, in development, **not for production use**.
+## Current state
+
+Active development, **not for production use**.
 
 ## Summary
 

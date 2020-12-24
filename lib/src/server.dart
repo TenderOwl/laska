@@ -36,14 +36,17 @@ class Server {
     var route = router.lookup(request.uri.path);
 
     // Check if route has a handler
-    if (route?.handler != null) {
+    if (route == null || route.handlers == null) {
+      await sendNotFound(context);
+    } else {
+
+      var handler = route.handlers[request.method];
       // Check if route use the same method as requested=
-      if (route?.method != request.method) {
+      if (handler == null) {
         await sendMethodNotAllowed(context);
       } else {
         try {
           context.route = route;
-          var handler = route.handler;
 
           // Iterate over all middlewares and execute them one after another
           if (middleware.isNotEmpty) {
@@ -67,8 +70,6 @@ class Server {
           await sendInternalError(context);
         }
       }
-    } else {
-      await sendNotFound(context);
     }
 
     await request.response.close();

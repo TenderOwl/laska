@@ -4,6 +4,7 @@ class Node {
   NodeType type;
   Map<String, dynamic> data;
   String method;
+  Map<String, Function> handlers = {};
   Function handler;
   Node parent;
   Map<String, Node> children = {};
@@ -18,12 +19,11 @@ class Node {
 }
 
 class Route {
-  String method;
   String path;
-  Function handler;
-  Map<String, dynamic> params;
+  Map<String, dynamic> params = {};
+  Map<String, Function> handlers = {};
 
-  Route(this.method, this.path, this.handler, {this.params});
+  Route(this.path, this.handlers, {this.params});
 }
 
 class Router {
@@ -34,12 +34,14 @@ class Router {
   Router({List<Route> routes, this.strictMode = true}) {
     if (routes != null) {
       routes.forEach((route) {
-        insert(route.method, route.path, route.handler);
+        route.handlers.forEach((method, handler) {
+          insert(method, route.path, handler);
+        });
       });
     }
   }
 
-  void insert(String method, String path, Function handler) {
+  Node insert(String method, String path, Function handler) {
     var isStaticRoute = true;
 
     // Validate and normalize path
@@ -80,13 +82,14 @@ class Router {
       }
     }
 
-    // Save route data
-    node.method = method;
-    node.handler = handler;
+    // Set route handlers
+    node.handlers[method] = handler;
 
     if (isStaticRoute) {
       staticRoutesMap[path] = node;
     }
+
+    return node;
   }
 
   Route lookup(String path) {
@@ -95,12 +98,12 @@ class Router {
     // variable sections, retrieve from a static routes map
     if (staticRoutesMap.containsKey(path)) {
       final staticRoute = staticRoutesMap[path];
-      return Route(staticRoute.method, path, staticRoute.handler);
+      return Route(path, staticRoute.handlers);
     }
 
     final nodeMap = findNode(path, rootNode);
-    return Route(nodeMap['node']?.method, path, nodeMap['node']?.handler,
-        params: nodeMap['params']);
+    if (nodeMap['node'] == null) return null;
+    return Route(path, nodeMap['node'].handlers, params: nodeMap['params']);
   }
 
   String validateInput(String path) {
