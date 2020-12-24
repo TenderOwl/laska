@@ -1,8 +1,7 @@
 import 'dart:io';
 
-import 'package:laska/context.dart';
 import 'package:laska/laska.dart';
-import 'package:laska/middleware/basic_auth.dart';
+
 
 void main() async {
   // Create new Laska object with 2 [Isolate]

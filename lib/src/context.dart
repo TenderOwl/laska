@@ -1,7 +1,7 @@
 import 'dart:convert' show jsonEncode, utf8;
 import 'dart:io';
 
-import 'package:laska/router.dart';
+import 'router.dart';
 
 /// Context represents the context of the current HTTP request. It holds request and
 /// response objects, path, path parameters, data and registered handler.

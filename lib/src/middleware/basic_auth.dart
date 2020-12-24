@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:laska/context.dart';
-import 'package:laska/middleware/middleware.dart';
+import '../context.dart';
+import 'middleware.dart';
 
 class BasicAuth implements Middleware {
   String digest;

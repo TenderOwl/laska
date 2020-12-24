@@ -1,4 +1,4 @@
-import 'package:laska/context.dart';
+import '../context.dart';
 
 /// Middleware is a class with `execute` method
 /// called before the route handler will be called.

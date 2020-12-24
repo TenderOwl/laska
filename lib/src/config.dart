@@ -1,7 +1,7 @@
 import 'dart:io';
-import 'package:laska/middleware/basic_auth.dart';
-import 'package:laska/middleware/middleware.dart';
-import 'package:laska/router.dart';
+
+import 'middleware/middleware.dart';
+import 'router.dart';
 
 /// Stores [Laska] configuration.
 class Configuration {

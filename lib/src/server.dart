@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:laska/context.dart';
-import 'package:laska/middleware/middleware.dart';
-import 'package:laska/router.dart';
+import 'context.dart';
+import 'middleware/middleware.dart';
+import 'router.dart';
 
 import 'config.dart';
 
