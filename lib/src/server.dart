@@ -48,7 +48,7 @@ class Server {
         try {
           context.route = route;
 
-          // Iterate over all middlewares and execute them one after another
+          // Iterate over global middlewares and execute them one after another
           if (middleware.isNotEmpty) {
             for (var i = 0; i < middleware.length; i++) {
               // Middleware can return [null] in case

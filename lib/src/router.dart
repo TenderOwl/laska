@@ -1,11 +1,12 @@
+import '../laska.dart';
+
 enum NodeType { NORMAL, WILDCARD, PLACEHOLDER }
 
 class Node {
   NodeType type;
   Map<String, dynamic> data;
-  String method;
+  List<Middleware> middlewares = [];
   Map<String, Function> handlers = {};
-  Function handler;
   Node parent;
   Map<String, Node> children = {};
 
@@ -15,7 +16,7 @@ class Node {
   Node wildcardChildNode;
   Node placeholderChildNode;
 
-  Node({this.type = NodeType.NORMAL, this.handler, this.parent});
+  Node({this.type = NodeType.NORMAL, this.handlers, this.parent});
 }
 
 class Route {
@@ -41,7 +42,7 @@ class Router {
     }
   }
 
-  Node insert(String method, String path, Function handler) {
+  Node insert(String method, String path, Function handler, {List<Middleware> middlewares}) {
     var isStaticRoute = true;
 
     // Validate and normalize path

@@ -29,24 +29,24 @@ class Laska {
 
   set router(Router router) => config.router = router;
 
-  void GET(String path, Function handler) {
-    handle('GET', path, handler);
+  void GET(String path, Function handler, {List<Middleware> middlewares}) {
+    handle('GET', path, handler, middlewares: middlewares);
   }
 
-  void POST(String path, Function handler) {
-    handle('POST', path, handler);
+  void POST(String path, Function handler, {List<Middleware> middlewares}) {
+    handle('POST', path, handler, middlewares: middlewares);
   }
 
-  void PUT(String path, Function handler) {
-    handle('PUT', path, handler);
+  void PUT(String path, Function handler, {List<Middleware> middlewares}) {
+    handle('PUT', path, handler, middlewares: middlewares);
   }
 
-  void DELETE(String path, Function handler) {
-    handle('DELETE', path, handler);
+  void DELETE(String path, Function handler, {List<Middleware> middlewares}) {
+    handle('DELETE', path, handler, middlewares: middlewares);
   }
 
-  void handle(String method, String path, Function handler) {
-    config.router.insert(method, path, handler);
+  void handle(String method, String path, Function handler, {List<Middleware> middlewares}) {
+    config.router.insert(method, path, handler, middlewares: middlewares);
   }
 
   void Use(Middleware middleware) {
