@@ -21,6 +21,20 @@ class Todo {
   }
 }
 
+class APIResponse {
+  dynamic data;
+  dynamic status;
+
+  APIResponse({this.data, this.status});
+
+  Map<String, dynamic> toJson() {
+    return {
+      'data': data,
+      'status': status,
+    };
+  }
+}
+
 // 2. Store list of todos in memory.
 List<Todo> todos = [
   Todo(id: '1', text: 'Make something useful'),
@@ -41,11 +55,12 @@ void main(List<String> args) async {
 
 void getTasks(Context context) async {
   // 5. Return todos list.
-  await context.JSON(todos);
+  await context.JSON(APIResponse(data: todos));
 }
 
 void putTask(Context context) async {
   // 6. Read text and id from JSON body and put into todos list.
   todos.add(Todo(id: '3', text: 'New todo'));
-  await context.JSON({'status': 'created'}, statusCode: HttpStatus.created);
+  await context.JSON(APIResponse(status: {'status': 'created'}),
+      statusCode: HttpStatus.created);
 }
