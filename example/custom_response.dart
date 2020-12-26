@@ -21,6 +21,9 @@ class Todo {
   }
 }
 
+// Custom response class.
+// It is a simple class with `toJson()` method
+// which returns required JSON structure.
 class APIResponse {
   dynamic data;
   dynamic status;

@@ -5,8 +5,8 @@ enum NodeType { NORMAL, WILDCARD, PLACEHOLDER }
 class Node {
   NodeType type;
   Map<String, dynamic> data;
-  List<Middleware> middlewares = [];
   Map<String, Function> handlers = {};
+  Map<String, Set<Middleware>> middlewares = {};
   Node parent;
   Map<String, Node> children = {};
 
@@ -16,15 +16,16 @@ class Node {
   Node wildcardChildNode;
   Node placeholderChildNode;
 
-  Node({this.type = NodeType.NORMAL, this.handlers, this.parent});
+  Node({this.type = NodeType.NORMAL, this.parent});
 }
 
 class Route {
   String path;
   Map<String, dynamic> params = {};
   Map<String, Function> handlers = {};
+  Map<String, Set<Middleware>> middlewares = {};
 
-  Route(this.path, this.handlers, {this.params});
+  Route(this.path, {this.handlers, this.params, this.middlewares});
 }
 
 class Router {
@@ -42,7 +43,8 @@ class Router {
     }
   }
 
-  Node insert(String method, String path, Function handler, {List<Middleware> middlewares}) {
+  Node insert(String method, String path, Function handler,
+      {Set<Middleware> middlewares}) {
     var isStaticRoute = true;
 
     // Validate and normalize path
@@ -85,6 +87,7 @@ class Router {
 
     // Set route handlers
     node.handlers[method] = handler;
+    node.middlewares[method] = middlewares ?? {};
 
     if (isStaticRoute) {
       staticRoutesMap[path] = node;
@@ -99,12 +102,19 @@ class Router {
     // variable sections, retrieve from a static routes map
     if (staticRoutesMap.containsKey(path)) {
       final staticRoute = staticRoutesMap[path];
-      return Route(path, staticRoute.handlers);
+      return Route(path,
+          handlers: staticRoute.handlers, middlewares: staticRoute.middlewares);
     }
 
     final nodeMap = findNode(path, rootNode);
+
+    // Return `null` if node not found to throw 404 later.
     if (nodeMap['node'] == null) return null;
-    return Route(path, nodeMap['node'].handlers, params: nodeMap['params']);
+
+    return Route(path,
+        handlers: nodeMap['node'].handlers,
+        params: nodeMap['params'],
+        middlewares: nodeMap['node'].middlewares);
   }
 
   String validateInput(String path) {

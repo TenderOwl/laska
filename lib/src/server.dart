@@ -17,11 +17,11 @@ class Server {
   Configuration config;
   HttpServer server;
   Router router;
-  List<Middleware> middleware;
+  Set<Middleware> middlewares;
 
   Server(this.config) {
     router = config.router;
-    middleware = config.middleware;
+    middlewares = config.middlewares;
   }
 
   void run() async {
@@ -39,8 +39,8 @@ class Server {
     if (route == null || route.handlers == null) {
       await sendNotFound(context);
     } else {
-
       var handler = route.handlers[request.method];
+      var routeMiddlewares = route.middlewares[request.method];
       // Check if route use the same method as requested=
       if (handler == null) {
         await sendMethodNotAllowed(context);
@@ -48,24 +48,18 @@ class Server {
         try {
           context.route = route;
 
-          // Iterate over global middlewares and execute them one after another
-          if (middleware.isNotEmpty) {
-            for (var i = 0; i < middleware.length; i++) {
-              // Middleware can return [null] in case
-              // if it's need to stop request handling.
-              if (handler != null) {
-                handler = await middleware[i].execute(handler, context);
-              } else {
-                break;
-              }
-            }
-          }
+          // Concatenate global and route middlewares
+          handler = await _applyMiddlewares(handler, context, routeMiddlewares ?? {});
 
-          // After all middlewares, if the handler still exists we can safely call it.
+          // Apply middlewares
+          handler = await _applyMiddlewares(handler, context, middlewares);
+
+          // If the handler still not null we can safely call it.
           if (handler != null) {
             await handler(context);
           }
         } catch (exception) {
+          // TODO: no prints! in production code
           print(exception);
           await sendInternalError(context);
         }
@@ -73,6 +67,23 @@ class Server {
     }
 
     await request.response.close();
+  }
+
+  Future<Function> _applyMiddlewares(
+      Function handler, Context context, Set<Middleware> middlewares) async {
+    // Iterate over global middlewares and execute them one after another
+    if (middlewares.isNotEmpty) {
+      for (var middleware in middlewares.toList().reversed) {
+        // Middleware can return [null] in case
+        // if it's need to stop request handling.
+        if (handler != null) {
+          handler = await middleware.execute(handler, context);
+        } else {
+          break;
+        }
+      }
+    }
+    return handler;
   }
 
   void sendInternalError(Context context) async {

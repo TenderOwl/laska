@@ -20,7 +20,7 @@ class Laska {
       ..address = address ?? 'localhost'
       ..port = port ?? 3788
       ..isolatesCount = isolateCount ?? Platform.numberOfProcessors
-      ..middleware = <Middleware>[]
+      ..middlewares = <Middleware>{}
       ..router = router ?? Router();
   }
 
@@ -29,29 +29,39 @@ class Laska {
 
   set router(Router router) => config.router = router;
 
-  void GET(String path, Function handler, {List<Middleware> middlewares}) {
-    handle('GET', path, handler, middlewares: middlewares);
+  /// Registers a new GET route for a `path` with matching `handler` in the router
+  /// with optional route-level `middlewares`.
+  void GET(String path, Function handler, {Set<Middleware> middlewares}) {
+    any('GET', path, handler, middlewares: middlewares);
   }
 
-  void POST(String path, Function handler, {List<Middleware> middlewares}) {
-    handle('POST', path, handler, middlewares: middlewares);
+  /// Registers a new POST route for a `path` with matching `handler` in the router
+  /// with optional route-level `middlewares`.
+  void POST(String path, Function handler, {Set<Middleware> middlewares}) {
+    any('POST', path, handler, middlewares: middlewares);
   }
 
-  void PUT(String path, Function handler, {List<Middleware> middlewares}) {
-    handle('PUT', path, handler, middlewares: middlewares);
+  /// Registers a new PUT route for a `path` with matching `handler` in the router
+  /// with optional route-level `middlewares`.
+  void PUT(String path, Function handler, {Set<Middleware> middlewares}) {
+    any('PUT', path, handler, middlewares: middlewares);
   }
 
-  void DELETE(String path, Function handler, {List<Middleware> middlewares}) {
-    handle('DELETE', path, handler, middlewares: middlewares);
+  /// Registers a new DELETE route for a `path` with matching `handler` in the router
+  /// with optional route-level `middlewares`.
+  void DELETE(String path, Function handler, {Set<Middleware> middlewares}) {
+    any('DELETE', path, handler, middlewares: middlewares);
   }
 
-  void handle(String method, String path, Function handler, {List<Middleware> middlewares}) {
+  // Registers a new route for all HTTP methods and `path` with matching `handler`
+  // in the router with optional route-level `middlewares`.
+  void any(String method, String path, Function handler, {Set<Middleware> middlewares}) {
     config.router.insert(method, path, handler, middlewares: middlewares);
   }
 
   void Use(Middleware middleware) {
-    if (!config.middleware.contains(middleware)) {
-      config.middleware.add(middleware);
+    if (!config.middlewares.contains(middleware)) {
+      config.middlewares.add(middleware);
     }
   }
 }

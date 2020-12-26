@@ -17,5 +17,6 @@ class Configuration {
   /// The Router object filled with routes.
   Router router;
 
-  List<Middleware> middleware;
+  /// Set of global `Middleware`.
+  Set<Middleware> middlewares;
 }
