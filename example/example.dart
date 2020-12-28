@@ -4,27 +4,29 @@ import 'package:laska/laska.dart';
 
 // 1. Make a data class
 class Todo {
-  String id;
   String text;
+  bool done;
 
-  Todo({this.id, this.text});
+  Todo({this.text, this.done = false});
 
   Todo.fromJson(Map<String, dynamic> json)
-      : id = json['id'],
-        text = json['text'];
+      : text = json['text'],
+        done = json['done'];
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
       'text': text,
+      'done': done,
     };
   }
 }
 
 // 2. Store list of todos in memory.
 List<Todo> todos = [
-  Todo(id: '1', text: 'Make something useful'),
-  Todo(id: '2', text: 'Make new website'),
+  Todo(text: 'Make something useful'),
+  Todo(
+    text: 'Make new website',
+  ),
 ];
 
 void main(List<String> args) async {
@@ -35,7 +37,7 @@ void main(List<String> args) async {
   laska.GET('/tasks', getTasks);
   laska.POST('/tasks', putTask);
 
-  // 7. Run the application
+  // 9. Run the application
   await run(laska);
 }
 
@@ -45,7 +47,16 @@ void getTasks(Context context) async {
 }
 
 void putTask(Context context) async {
-  // 6. Read text and id from JSON body and put into todos list.
-  todos.add(Todo(id: '3', text: 'New todo'));
+  // 6. Parse request body.
+  final httpBody = await context.body;
+
+  // 7. Simple check for a content type
+  if (httpBody.type != 'json') {
+    return await context.Text('Unsupported Media Type',
+        statusCode: HttpStatus.unsupportedMediaType);
+  }
+
+  // 8. Create a new task
+  todos.add(Todo.fromJson(httpBody.body));
   await context.JSON({'status': 'created'}, statusCode: HttpStatus.created);
 }

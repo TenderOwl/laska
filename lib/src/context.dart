@@ -1,5 +1,7 @@
-import 'dart:convert' show jsonEncode, utf8;
+import 'dart:convert' show jsonEncode;
 import 'dart:io';
+
+import 'package:laska/src/http/http_body.dart';
 
 import 'router.dart';
 
@@ -20,7 +22,10 @@ class Context {
   /// Path returns the registered path for the handler.
   String get path => request.uri.path;
 
-  Future<String> get body => utf8.decodeStream(request);
+  /// Parse the request body and return `HttpBody` object.
+  Future<HttpBody> get body async {
+    return await HttpBodyHandler.processRequest(request);
+  }
 
   /// List of all cookies in the request.
   List<Cookie> get cookies => request.cookies;
