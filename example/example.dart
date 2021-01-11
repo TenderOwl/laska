@@ -31,14 +31,14 @@ List<Todo> todos = [
 
 void main(List<String> args) async {
   // 3. Create a server.
-  final laska = Laska(isolateCount: 1);
+  final laska = Laska();
 
   // 4. Add routes to get and add a new tasks.
   laska.GET('/tasks', getTasks);
   laska.POST('/tasks', putTask);
 
   // 9. Run the application
-  await run(laska);
+  await laska.run();
 }
 
 void getTasks(Context context) async {

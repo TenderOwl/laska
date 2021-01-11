@@ -25,9 +25,9 @@ class Server {
   }
 
   void run() async {
-    server = await HttpServer.bind(config.address, config.port, shared: true);
+    server = await HttpServer.bind(config.address, config.port);
     server.listen(handleRequest);
-    print('=> worker [PID:${identityHashCode(this)}] is ready');
+    print('Server started on http://${config.address}:${config.port}');
   }
 
   void handleRequest(HttpRequest request) async {
