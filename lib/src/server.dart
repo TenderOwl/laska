@@ -25,9 +25,9 @@ class Server {
   }
 
   void run() async {
-    server = await HttpServer.bind(config.address, config.port, shared: true);
+    server = await HttpServer.bind(config.address, config.port);
     server.listen(handleRequest);
-    print('=> worker [PID:${identityHashCode(this)}] is ready');
+    print('Server started on http://${config.address}:${config.port}');
   }
 
   void handleRequest(HttpRequest request) async {
@@ -61,7 +61,7 @@ class Server {
         } catch (exception) {
           // TODO: no prints! in production code
           print(exception);
-          await sendInternalError(context);
+          await sendInternalError(context, exception: exception);
         }
       }
     }
@@ -86,9 +86,12 @@ class Server {
     return handler;
   }
 
-  void sendInternalError(Context context) async {
+  void sendInternalError(Context context, {Exception exception}) async {
     context.response.statusCode = HttpStatus.internalServerError;
-    await context.Text('Internal Server Error',
+    final message = 'Internal Server Error\n'
+        '${exception.toString()}\n'
+        '${StackTrace.current}';
+    await context.Text(message,
         statusCode: HttpStatus.internalServerError);
   }
 
