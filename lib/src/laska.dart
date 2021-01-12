@@ -1,6 +1,3 @@
-import 'dart:io';
-import 'dart:isolate';
-
 import 'middleware/middleware.dart';
 import 'router.dart';
 import 'server.dart';
@@ -33,6 +30,12 @@ class Laska {
     any('GET', path, handler, middlewares: middlewares);
   }
 
+  /// Registers a new PATCH route for a `path` with matching `handler` in the router
+  /// with optional route-level `middlewares`.
+  void PATCH(String path, Function handler, {Set<Middleware> middlewares}) {
+    any('PATCH', path, handler, middlewares: middlewares);
+  }
+
   /// Registers a new POST route for a `path` with matching `handler` in the router
   /// with optional route-level `middlewares`.
   void POST(String path, Function handler, {Set<Middleware> middlewares}) {
@@ -53,7 +56,8 @@ class Laska {
 
   // Registers a new route for all HTTP methods and `path` with matching `handler`
   // in the router with optional route-level `middlewares`.
-  void any(String method, String path, Function handler, {Set<Middleware> middlewares}) {
+  void any(String method, String path, Function handler,
+      {Set<Middleware> middlewares}) {
     config.router.insert(method, path, handler, middlewares: middlewares);
   }
 
