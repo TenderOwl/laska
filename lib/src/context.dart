@@ -3,15 +3,20 @@ import 'dart:io';
 
 import 'package:laska/src/http/http_body.dart';
 
+import 'laska.dart';
 import 'router.dart';
 
 /// Context represents the context of the current HTTP request. It holds request and
 /// response objects, path, path parameters, data and registered handler.
 class Context {
+  /// Instance of the application
+  Laska app;
+
   HttpRequest request;
 
   HttpResponse response;
 
+  /// Current `Route`
   Route route;
 
   InternetAddress get realIp => request.connectionInfo.remoteAddress;
@@ -66,7 +71,7 @@ class Context {
     request.response.write(s);
   }
 
-  Context(this.request, {this.route}) {
+  Context(this.request, {this.route, this.app}) {
     response = request.response;
   }
 }

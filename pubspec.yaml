@@ -8,6 +8,7 @@ environment:
 
 dependencies:
   mime: ^0.9.7
+  event: ^1.1.4
 #  path: ^1.7.0
 
 dev_dependencies:

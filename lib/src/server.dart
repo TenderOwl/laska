@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:isolate';
 
+import 'laska.dart';
+
 import 'context.dart';
 import 'middleware/middleware.dart';
 import 'router.dart';
@@ -18,8 +20,9 @@ class Server {
   HttpServer server;
   Router router;
   Set<Middleware> middlewares;
+  Laska app;
 
-  Server(this.config) {
+  Server(this.config, {this.app}) {
     router = config.router;
     middlewares = config.middlewares;
   }
@@ -30,8 +33,12 @@ class Server {
     print('Server started on http://${config.address}:${config.port}');
   }
 
+  void stop({bool force = false}) async {
+    await server.close(force: force);
+  }
+
   void handleRequest(HttpRequest request) async {
-    var context = Context(request);
+    var context = Context(request, app: app);
 
     var route = router.lookup(request.uri.path);
 

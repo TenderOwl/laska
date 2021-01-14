@@ -1,3 +1,8 @@
+import 'dart:io';
+
+import 'package:event/event.dart';
+import 'package:laska/src/events.dart';
+
 import 'middleware/middleware.dart';
 import 'router.dart';
 import 'server.dart';
@@ -5,6 +10,13 @@ import 'config.dart';
 
 class Laska {
   Configuration config;
+
+  var before_startup = Event<StartupEventArgs>();
+  var after_startup = Event<StartupEventArgs>();
+  var before_teardown = Event<TeardownEventArgs>();
+  var after_teardown = Event<TeardownEventArgs>();
+
+  Server server;
 
   Laska(
       {this.config,
@@ -68,8 +80,26 @@ class Laska {
   }
 
   void run() async {
-    final server = Server(config);
+    await before_startup.broadcast(StartupEventArgs(this));
+
+    server = Server(config, app: this);
     await server.run();
+
+    await after_startup.broadcast(StartupEventArgs(this));
+
+    // Listen for SIGKILL and SIGINT to perform graceful teardown.
+    ProcessSignal.sigint.watch().listen((event) async => await stop());
+    ProcessSignal.sigterm.watch().listen((event) async => await stop());
+  }
+
+  void stop({bool force = false}) async {
+    print('\nStopping server...');
+
+    await before_teardown.broadcast(TeardownEventArgs(this));
+    await server.stop(force: force);
+    await after_teardown.broadcast(TeardownEventArgs(this));
+
+    exit(0);
   }
 }
 
