@@ -40,7 +40,7 @@ void main(List<String> args) async {
   laska.POST('/tasks', putTask);
 
   // 9. Run the application
-  await laska.run();
+  await run(laska);
 }
 
 void getTasks(Context context) async {

@@ -9,7 +9,6 @@ class Acl implements Middleware {
   @override
   Future<Function> execute(Function next, Context context) async {
     return (Context c) {
-
       // In this case it's simple check:
       // Does the request contains `role` header with `admin` value.
       final role = context.request.headers.value('role');
@@ -62,7 +61,7 @@ void main() async {
   // Add route with acl middleware, but only for the POST method.
   laska.POST('/users', getUsers, middlewares: {acl_middleware});
 
-  await laska.run();
+  await run(laska);
 }
 
 void secretHandler(Context context) async {

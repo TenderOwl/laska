@@ -14,5 +14,5 @@ void main(List<String> args) async {
   app.after_teardown.subscribe((app) => print('after_teardown 1'));
   app.after_teardown.subscribe((app) => print('after_teardown 2'));
 
-  await app.run();
+  await run(app);
 }
