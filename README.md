@@ -1,19 +1,35 @@
 # Laska
 
-Laska is a server-side microframework for [Dart](https://dart.dev/).
+Laska is a server-side microframework for [Dart](https://dart.dev/), which aims to be a fast, simple and lightweight.
+
+- **Routing**: Requests to function-call mapping with support for clean and dynamic URLs.
+- **Middlewares**: Middlwares allow developers to modify request before it's being processed.
+- **Isolates**: Laska uses Isolates to secure request processing.
+
+### Example: "Hello world" in a Laska
+
+```dart
+import 'package:laska/laska.dart';
+
+void main() async {
+  final laska = Laska();
+
+  laska.GET('/hello/:name',
+      (context) async => await context.Text("Hello ${context.param('name')}!"));
+
+  await run(laska);
+}
+```
+
+Run this script via `dart run hello_world.dart`, then point your browser to http://localhost:3789/hello/world. That’s it.
+
 
 ## Current state
 
 Active development, **not for production use**.
 
-## Summary
 
-- [x] Dynamic routing with placeholders and wildcards
-- [x] Extensible Middleware support
-- [ ] Template rendering
-- [ ] Logging
-
-## Example
+## Full Example
 
 ```dart
 import 'dart:io';
@@ -42,6 +58,11 @@ void createUser(Context context) async {
   await context.JSON({'status': 'created'}, statusCode: HttpStatus.created);
 }
 ```
+
+## Routing
+
+Laska uses a powerful routing engine to find the right callback for each request. it's based on [Trie](https://en.wikipedia.org/wiki/Trie) data structure which let it be very performant.
+
 
 ## License
 
