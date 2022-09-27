@@ -49,7 +49,7 @@ class Server {
   Future run() async {
     server = await HttpServer.bind(config.address, config.port, shared: true);
     server!.listen(handleRequest);
-    print('=> worker [PID:${identityHashCode(this)}] is ready');
+    log('=> worker [PID:${identityHashCode(this)}] is ready');
   }
 
   /// Handles the incoming request.
@@ -86,7 +86,7 @@ class Server {
         } catch (exception) {
           // TODO: no prints! in production code
           // log(exception.toString());
-          print(exception);
+          log(exception.toString());
           await sendInternalError(context);
         }
       }

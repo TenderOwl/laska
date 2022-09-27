@@ -45,7 +45,7 @@ class Logger implements Middleware {
 }
 
 void main() async {
-  final laska = Laska(isolateCount: 2);
+  final laska = Laska();
 
   final acl_middleware = Acl(['admin']);
 
@@ -62,7 +62,7 @@ void main() async {
   // Add route with acl middleware, but only for the POST method.
   laska.POST('/users', getUsers, middlewares: {acl_middleware});
 
-  await run(laska);
+  await laska.run();
 }
 
 void secretHandler(Context context) async {

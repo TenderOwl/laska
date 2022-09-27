@@ -1,5 +1,9 @@
+import 'dart:developer';
 import 'dart:io';
 import 'dart:isolate';
+
+import 'package:event/event.dart';
+import 'package:laska/src/events.dart';
 
 import 'package:laska/src/middleware/middleware.dart';
 import 'package:laska/src/router.dart';
@@ -8,6 +12,11 @@ import 'package:laska/src/config.dart';
 
 class Laska {
   Configuration? config;
+
+  var before_startup = Event<StartupEventArgs>();
+  var after_startup = Event<StartupEventArgs>();
+  var before_teardown = Event<TeardownEventArgs>();
+  var after_teardown = Event<TeardownEventArgs>();
 
   Laska(
       {this.config,
@@ -68,8 +77,8 @@ class Laska {
   }
 }
 
-Future<void> run(Laska app) async {
-  // config.router = router;
+Future run(Laska app) async {
+  app.before_startup.broadcast(StartupEventArgs(app));
 
   // Store out workers
   var workers = <Worker>[];
@@ -88,6 +97,8 @@ Future<void> run(Laska app) async {
   await _startServer(receivePort.sendPort);
   var sendPort = (await receivePort.first as SendPort);
   sendPort.send(app);
+
+  app.after_startup.broadcast(StartupEventArgs(app));
 
   print('=> http server started on '
       '${app.config!.address}:${app.config!.port}');
