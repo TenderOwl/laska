@@ -1,31 +1,31 @@
-import '../laska.dart';
+import 'package:laska/laska.dart';
 
 enum NodeType { NORMAL, WILDCARD, PLACEHOLDER }
 
 class Node {
   NodeType type;
-  Map<String, dynamic> data;
-  Map<String, Function> handlers = {};
-  Map<String, Set<Middleware>> middlewares = {};
-  Node parent;
-  Map<String, Node> children = {};
+  Map<String, dynamic>? data;
+  Map<String, Function>? handlers = {};
+  Map<String, Set<Middleware>>? middlewares = {};
+  Node? parent;
+  Map<String, Node>? children = {};
 
   // keep track of special child nodes
-  String paramName;
-  Symbol paramSymbol;
-  Node wildcardChildNode;
-  Node placeholderChildNode;
+  String? paramName;
+  Symbol? paramSymbol;
+  Node? wildcardChildNode;
+  Node? placeholderChildNode;
 
   Node({this.type = NodeType.NORMAL, this.parent});
 }
 
 class Route {
   String path;
-  Map<String, dynamic> params = {};
+  Map<String, dynamic>? params = {};
   Map<String, Function> handlers = {};
-  Map<String, Set<Middleware>> middlewares = {};
+  Map<String, Set<Middleware>>? middlewares = {};
 
-  Route(this.path, {this.handlers, this.params, this.middlewares});
+  Route(this.path, {required this.handlers, this.params, this.middlewares});
 }
 
 class Router {
@@ -33,18 +33,16 @@ class Router {
   Map<String, Node> staticRoutesMap = {};
   final strictMode;
 
-  Router({List<Route> routes, this.strictMode = true}) {
-    if (routes != null) {
-      routes.forEach((route) {
-        route.handlers.forEach((method, handler) {
-          insert(method, route.path, handler);
-        });
+  Router({List<Route>? routes, this.strictMode = true}) {
+    routes?.forEach((route) {
+      route.handlers.forEach((method, handler) {
+        insert(method, route.path, handler);
       });
-    }
+    });
   }
 
   Node insert(String method, String path, Function handler,
-      {Set<Middleware> middlewares}) {
+      {Set<Middleware>? middlewares}) {
     var isStaticRoute = true;
 
     // Validate and normalize path
@@ -62,13 +60,13 @@ class Router {
       var childNode;
 
       if (children != null && children.containsKey(section)) {
-        node = children[section];
+        node = children[section]!;
       } else {
         final type = getNodeType(section);
 
         childNode = Node(type: type, parent: node);
 
-        node.children[section] = childNode;
+        node.children![section] = childNode;
 
         final nodeType = getNodeType(section);
         if (nodeType == NodeType.PLACEHOLDER) {
@@ -86,8 +84,8 @@ class Router {
     }
 
     // Set route handlers
-    node.handlers[method] = handler;
-    node.middlewares[method] = middlewares ?? {};
+    node.handlers![method] = handler;
+    node.middlewares![method] = middlewares ?? {};
 
     if (isStaticRoute) {
       staticRoutesMap[path] = node;
@@ -96,14 +94,15 @@ class Router {
     return node;
   }
 
-  Route lookup(String path) {
+  Route? lookup(String path) {
     path = validateInput(path);
     // optimization, if a route is static and does not have any
     // variable sections, retrieve from a static routes map
     if (staticRoutesMap.containsKey(path)) {
       final staticRoute = staticRoutesMap[path];
       return Route(path,
-          handlers: staticRoute.handlers, middlewares: staticRoute.middlewares);
+          handlers: staticRoute!.handlers!,
+          middlewares: staticRoute.middlewares);
     }
 
     final nodeMap = findNode(path, rootNode);
@@ -118,8 +117,6 @@ class Router {
   }
 
   String validateInput(String path) {
-    assert(path != null, '"path" must be provided');
-
     if (!strictMode && path.length > 1 && path.endsWith('/')) {
       path = path.substring(0, path.length - 1);
     }
@@ -144,23 +141,23 @@ class Router {
     var params = <String, dynamic>{};
     var paramsFound = false;
     var wildcardNode;
-    var node = rootNode;
+    Node? node = rootNode;
 
     for (var i = 0; i < sections.length; i++) {
       var section = sections[i];
       if (section.isEmpty) continue;
 
-      if (node.wildcardChildNode != null) {
-        wildcardNode = node.wildcardChildNode;
+      if (node?.wildcardChildNode != null) {
+        wildcardNode = node?.wildcardChildNode;
       }
 
-      final nextNode = node.children[section];
+      final nextNode = node?.children![section];
       if (nextNode != null) {
         node = nextNode;
       } else {
-        node = node.placeholderChildNode;
+        node = node?.placeholderChildNode;
         if (node != null) {
-          params[node.paramName] = section;
+          params[node.paramName!] = section;
           paramsFound = true;
         } else {
           break;

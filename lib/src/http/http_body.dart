@@ -112,7 +112,7 @@ class HttpBodyHandler
   /// The returned [HttpRequestBody] contains a `response` field for accessing
   /// the [HttpResponse].
   ///
-  /// See [new HttpBodyHandler] for more info on [defaultEncoding].
+  /// See [HttpBodyHandler] for more info on [defaultEncoding].
   static Future<HttpRequestBody> processRequest(HttpRequest request,
       {Encoding defaultEncoding = utf8}) async {
     try {
@@ -128,7 +128,7 @@ class HttpBodyHandler
 
   /// Process and parse an incoming [HttpClientResponse].
   ///
-  /// See [new HttpBodyHandler] for more info on [defaultEncoding].
+  /// See [HttpBodyHandler] for more info on [defaultEncoding].
   static Future<HttpClientResponseBody> processResponse(
       HttpClientResponse response,
       {Encoding defaultEncoding = utf8}) async {
@@ -227,8 +227,8 @@ Future<HttpBody> _process(Stream<List<int>> stream, HttpHeaders headers,
   }
 
   Future<HttpBody> asText(Encoding defaultEncoding) async {
-    Encoding encoding;
-    var charset = contentType.charset;
+    Encoding? encoding;
+    var charset = contentType?.charset;
     if (charset != null) encoding = Encoding.getByName(charset);
     encoding ??= defaultEncoding;
     var buffer = await encoding.decoder
@@ -239,7 +239,7 @@ Future<HttpBody> _process(Stream<List<int>> stream, HttpHeaders headers,
 
   Future<HttpBody> asFormData() async {
     var values = await MimeMultipartTransformer(
-            contentType.parameters['boundary'])
+            contentType!.parameters['boundary']!)
         .bind(stream)
         .map((part) =>
             HttpMultipartFormData.parse(part, defaultEncoding: defaultEncoding))

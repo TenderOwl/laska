@@ -2,19 +2,22 @@ import 'dart:io';
 
 import 'package:laska/laska.dart';
 
-// 1. Make a data class
+// 1. Define a data class
 class Todo {
+  int id;
   String text;
   bool done;
 
-  Todo({this.text, this.done = false});
+  Todo({required this.id, required this.text, this.done = false});
 
   Todo.fromJson(Map<String, dynamic> json)
-      : text = json['text'],
+      : id = json['id'],
+        text = json['text'],
         done = json['done'];
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'text': text,
       'done': done,
     };
@@ -23,10 +26,8 @@ class Todo {
 
 // 2. Store list of todos in memory.
 List<Todo> todos = [
-  Todo(text: 'Make something useful'),
-  Todo(
-    text: 'Make new website',
-  ),
+  Todo(id: 1, text: 'Make something useful'),
+  Todo(id: 2, text: 'Make new website'),
 ];
 
 void main(List<String> args) async {
@@ -35,6 +36,7 @@ void main(List<String> args) async {
 
   // 4. Add routes to get and add a new tasks.
   laska.GET('/tasks', getTasks);
+  laska.GET('/tasks/:id', getTask);
   laska.POST('/tasks', putTask);
 
   // 9. Run the application
@@ -44,6 +46,12 @@ void main(List<String> args) async {
 void getTasks(Context context) async {
   // 5. Return todos list.
   await context.JSON(todos);
+}
+
+void getTask(Context context) async {
+  await context.JSON(todos.firstWhere(
+      (t) => t.id == int.parse(context.param('id')!),
+      orElse: null));
 }
 
 void putTask(Context context) async {

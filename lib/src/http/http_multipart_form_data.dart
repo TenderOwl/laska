@@ -67,21 +67,21 @@ class HttpMultipartFormData extends Stream {
   /// constraints.html#multipart-form-data).
   static HttpMultipartFormData parse(MimeMultipart multipart,
       {Encoding defaultEncoding = utf8}) {
-    ContentType contentType;
-    HeaderValue encoding;
-    HeaderValue disposition;
+    ContentType? contentType;
+    HeaderValue? encoding;
+    HeaderValue? disposition;
     for (var key in multipart.headers.keys) {
       switch (key) {
         case 'content-type':
-          contentType = ContentType.parse(multipart.headers[key]);
+          contentType = ContentType.parse(multipart.headers[key]!);
           break;
 
         case 'content-transfer-encoding':
-          encoding = HeaderValue.parse(multipart.headers[key]);
+          encoding = HeaderValue.parse(multipart.headers[key]!);
           break;
 
         case 'content-disposition':
-          disposition = HeaderValue.parse(multipart.headers[key],
+          disposition = HeaderValue.parse(multipart.headers[key]!,
               preserveBackslash: true);
           break;
 
@@ -105,15 +105,15 @@ class HttpMultipartFormData extends Stream {
         contentType.primaryType == 'text' ||
         contentType.mimeType == 'application/json';
     if (isText) {
-      Encoding encoding;
+      Encoding? encoding;
       if (contentType?.charset != null) {
-        encoding = Encoding.getByName(contentType.charset);
+        encoding = Encoding.getByName(contentType?.charset);
       }
       encoding ??= defaultEncoding;
       stream = stream.transform(encoding.decoder);
     }
     return HttpMultipartFormData._(
-        contentType, disposition, encoding, multipart, stream, isText);
+        contentType!, disposition, encoding!, multipart, stream, isText);
   }
 
   final MimeMultipart _mimeMultipart;
@@ -129,8 +129,8 @@ class HttpMultipartFormData extends Stream {
       this.isText);
 
   @override
-  StreamSubscription listen(void Function(dynamic) onData,
-      {void Function() onDone, Function onError, bool cancelOnError}) {
+  StreamSubscription listen(void Function(dynamic)? onData,
+      {void Function()? onDone, Function? onError, bool? cancelOnError}) {
     return _stream.listen(onData,
         onDone: onDone, onError: onError, cancelOnError: cancelOnError);
   }
@@ -141,7 +141,7 @@ class HttpMultipartFormData extends Stream {
   ///
   /// Use this method to index other headers available in the original
   /// [MimeMultipart].
-  String value(String name) {
+  String? value(String name) {
     return _mimeMultipart.headers[name];
   }
 }

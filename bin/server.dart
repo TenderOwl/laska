@@ -7,7 +7,7 @@ class Todo {
   String text;
   bool done;
 
-  Todo({this.text, this.done = false});
+  Todo({required this.text, this.done = false});
 
   Todo.fromJson(Map<String, dynamic> json)
       : text = json['text'],

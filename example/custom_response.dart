@@ -7,7 +7,7 @@ class Todo {
   String id;
   String text;
 
-  Todo({this.id, this.text});
+  Todo({required this.id, required this.text});
 
   Todo.fromJson(Map<String, dynamic> json)
       : id = json['id'],

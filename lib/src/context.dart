@@ -3,18 +3,18 @@ import 'dart:io';
 
 import 'package:laska/src/http/http_body.dart';
 
-import 'router.dart';
+import 'package:laska/src/router.dart' show Route;
 
 /// Context represents the context of the current HTTP request. It holds request and
 /// response objects, path, path parameters, data and registered handler.
 class Context {
   HttpRequest request;
 
-  HttpResponse response;
+  HttpResponse? response;
 
-  Route route;
+  Route? route;
 
-  InternetAddress get realIp => request.connectionInfo.remoteAddress;
+  InternetAddress get realIp => request.connectionInfo!.remoteAddress;
 
   /// Scheme returns the HTTP protocol scheme, `http` or `https`.
   String get scheme => request.uri.scheme;
@@ -31,16 +31,17 @@ class Context {
   List<Cookie> get cookies => request.cookies;
 
   /// Returns the query param for the provided [name].
-  String queryParam(String name) => request.uri.queryParameters[name];
+  String? queryParam(String name) => request.uri.queryParameters[name];
 
   /// All the query parameters in request.
-  Map<String, String> get queryParams => request.uri.queryParameters;
+  Map<String, String>? get queryParams => request.uri.queryParameters;
 
   /// Returns the [Route] parameter for the provided [name].
-  String param(String name) => route?.params[name];
+  String? param(String name) => route?.params?[name];
 
   /// All the [Route] parameters in request.
-  Map<String, String> get params => Map<String, String>.from(route?.params);
+  Map<String, String>? get params =>
+      route?.params != null ? Map<String, String>.from(route!.params!) : null;
 
   /// Writes given string [s] as plain-text response.
   Future<void> Text(String s, {int statusCode = 200}) async {
@@ -59,8 +60,12 @@ class Context {
         contentType: ContentType.json, statusCode: statusCode);
   }
 
+  /// Writes response to the response stream.
+  ///
+  /// If [contentType] is not provided, it will be set to `text/plain`.
+  /// Sets [statusCode] to the response.
   Future<void> _writeResponse(String s,
-      {ContentType contentType, int statusCode = 200}) async {
+      {ContentType? contentType, int statusCode = 200}) async {
     request.response.statusCode = statusCode;
     request.response.headers.contentType = contentType ?? ContentType.text;
     request.response.write(s);

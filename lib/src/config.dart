@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'middleware/middleware.dart';
-import 'router.dart';
+import 'package:laska/src/middleware/middleware.dart';
+import 'package:laska/src/router.dart';
 
 /// Stores [Laska] configuration.
 class Configuration {
@@ -15,8 +15,8 @@ class Configuration {
   int port = 3789;
 
   /// The Router object filled with routes.
-  Router router;
+  Router? router;
 
   /// Set of global `Middleware`.
-  Set<Middleware> middlewares;
+  Set<Middleware>? middlewares;
 }
