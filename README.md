@@ -31,7 +31,7 @@ void main() async {
   laska.POST('/users/', createUser);
 
   // Start server
-  await laska.run();
+  await run(laska);
 }
 
 void getUserById(Context context) async {
