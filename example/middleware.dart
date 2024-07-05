@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:laska/laska.dart';
 
 // Custom middleware that checks user access.
@@ -15,10 +17,10 @@ class Acl implements Middleware {
 
       // If the header's `role` is not in `allowedRoles`, reject the request.
       if (!allowedRoles.contains(role)) {
-        context.Text('Role $role is not allowed.');
+        context.text('Role $role is not allowed.');
         return null;
       }
-      print('Role $role is allowed.');
+      log('Role $role is allowed.');
 
       // Don't forget to call the handler.
       return next(c);
@@ -35,7 +37,7 @@ class Logger implements Middleware {
   @override
   Future<Function> execute(Function next, Context context) async {
     return (Context c) {
-      print('$prefix: Path: ${context.path}');
+      log('$prefix: Path: ${context.path}');
 
       // Don't forget to call the handler.
       return next(c);
@@ -46,30 +48,30 @@ class Logger implements Middleware {
 void main() async {
   final laska = Laska();
 
-  final acl_middleware = Acl(['admin']);
+  final aclMiddleware = Acl(['admin']);
 
   // Add global middleware
-  laska.Use(Logger('global'));
+  laska.use(Logger('global'));
 
   // Create handler with per-route middlewares: logger and acl
-  laska.GET('/secret', secretHandler,
-      middlewares: {Logger('route'), acl_middleware});
+  laska.get('/secret', secretHandler,
+      middlewares: {Logger('route'), aclMiddleware});
 
   // Add route handler, only global middleware will apply
-  laska.GET('/users', getUsers);
+  laska.get('/users', getUsers);
 
   // Add route with acl middleware, but only for the POST method.
-  laska.POST('/users', getUsers, middlewares: {acl_middleware});
+  laska.post('/users', getUsers, middlewares: {aclMiddleware});
 
   await run(laska);
 }
 
 void secretHandler(Context context) async {
-  await context.Text('You have access to secret path!');
+  await context.text('You have access to secret path!');
 }
 
 void getUsers(Context context) async {
-  await context.JSON([
+  await context.json([
     {'id': 1, 'name': 'Make something useful', 'status': 0},
     {'id': 2, 'name': 'Make new website', 'status': 1},
   ]);

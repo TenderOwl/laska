@@ -1,6 +1,6 @@
 import 'package:laska/laska.dart';
 
-enum NodeType { NORMAL, WILDCARD, PLACEHOLDER }
+enum NodeType { normal, wildcard, placeholder }
 
 class Node {
   NodeType type;
@@ -16,7 +16,7 @@ class Node {
   Node? wildcardChildNode;
   Node? placeholderChildNode;
 
-  Node({this.type = NodeType.NORMAL, this.parent});
+  Node({this.type = NodeType.normal, this.parent});
 }
 
 class Route {
@@ -31,7 +31,7 @@ class Route {
 class Router {
   final Node rootNode = Node();
   Map<String, Node> staticRoutesMap = {};
-  final strictMode;
+  final bool strictMode;
 
   Router({List<Route>? routes, this.strictMode = true}) {
     routes?.forEach((route) {
@@ -57,7 +57,7 @@ class Router {
       if (section.isEmpty) continue;
 
       final children = node.children;
-      var childNode;
+      Node childNode;
 
       if (children != null && children.containsKey(section)) {
         node = children[section]!;
@@ -69,12 +69,12 @@ class Router {
         node.children![section] = childNode;
 
         final nodeType = getNodeType(section);
-        if (nodeType == NodeType.PLACEHOLDER) {
+        if (nodeType == NodeType.placeholder) {
           childNode.paramName = section.substring(1);
-          childNode.paramSymbol = Symbol(childNode.paramName);
+          childNode.paramSymbol = Symbol(childNode.paramName!);
           node.placeholderChildNode = childNode;
           isStaticRoute = false;
-        } else if (nodeType == NodeType.WILDCARD) {
+        } else if (nodeType == NodeType.wildcard) {
           node.wildcardChildNode = childNode;
           isStaticRoute = false;
         }
@@ -126,11 +126,11 @@ class Router {
   NodeType getNodeType(String path) {
     NodeType type;
     if (path[0] == ':') {
-      type = NodeType.PLACEHOLDER;
+      type = NodeType.placeholder;
     } else if (path == '*') {
-      type = NodeType.WILDCARD;
+      type = NodeType.wildcard;
     } else {
-      type = NodeType.NORMAL;
+      type = NodeType.normal;
     }
     return type;
   }
@@ -140,7 +140,7 @@ class Router {
 
     var params = <String, dynamic>{};
     var paramsFound = false;
-    var wildcardNode;
+    Node? wildcardNode;
     Node? node = rootNode;
 
     for (var i = 0; i < sections.length; i++) {
@@ -172,19 +172,23 @@ class Router {
     return {'node': node, 'params': paramsFound ? params : null};
   }
 
-  void GET(String path, Function handler) {
+  void get(String path, Function handler) {
     custom('GET', path, handler);
   }
 
-  void POST(String path, Function handler) {
+  void post(String path, Function handler) {
     custom('POST', path, handler);
   }
 
-  void PUT(String path, Function handler) {
+  void put(String path, Function handler) {
     custom('PUT', path, handler);
   }
 
-  void DELETE(String path, Function handler) {
+  void patch(String path, Function handler) {
+    custom('PATCH', path, handler);
+  }
+
+  void delete(String path, Function handler) {
     custom('DELETE', path, handler);
   }
 

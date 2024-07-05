@@ -5,29 +5,33 @@ packages:
     dependency: "direct main"
     description:
       name: event
-      url: "https://pub.dartlang.org"
+      sha256: eb4814de94cbf6a10da9c4f652bc654087d7066e33566b5036822e6c0b24befb
+      url: "https://pub.dev"
     source: hosted
     version: "2.1.2"
   lints:
     dependency: "direct dev"
     description:
       name: lints
-      url: "https://pub.dartlang.org"
+      sha256: "976c774dd944a42e83e2467f4cc670daef7eed6295b10b36ae8c85bcbf828235"
+      url: "https://pub.dev"
     source: hosted
-    version: "2.0.0"
+    version: "4.0.0"
   mime:
     dependency: "direct main"
     description:
       name: mime
-      url: "https://pub.dartlang.org"
+      sha256: "2e123074287cc9fd6c09de8336dae606d1ddb88d9ac47358826db698c176a1f2"
+      url: "https://pub.dev"
     source: hosted
-    version: "1.0.2"
+    version: "1.0.5"
   mime_type:
     dependency: "direct main"
     description:
       name: mime_type
-      url: "https://pub.dartlang.org"
+      sha256: "2ad6e67d3d2de9ac0f8ef5352d998fd103cb21351ae8c02fb0c78b079b37d275"
+      url: "https://pub.dev"
     source: hosted
     version: "1.0.0"
 sdks:
-  dart: ">=2.18.1 <3.0.0"
+  dart: ">=3.4.0 <4.0.0"

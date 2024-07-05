@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer';
 import 'dart:io';
 
 import 'package:laska/src/context.dart';
@@ -24,7 +25,7 @@ class BasicAuth implements Middleware {
         return sendUnauthorized(context);
       }
 
-      print('BasicAuth: $digest == ${authHeader.substring(6)}');
+      log('BasicAuth: $digest == ${authHeader.substring(6)}');
 
       // Check auth digest
       if (digest == authHeader.substring(6)) {

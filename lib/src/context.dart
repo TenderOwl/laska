@@ -44,18 +44,18 @@ class Context {
       route?.params != null ? Map<String, String>.from(route!.params!) : null;
 
   /// Writes given string [s] as plain-text response.
-  Future<void> Text(String s, {int statusCode = 200}) async {
+  Future<void> text(String s, {int statusCode = 200}) async {
     await _writeResponse(s, statusCode: statusCode);
   }
 
   /// Writes given string [s] as HTML response.
-  Future<void> HTML(String s, {int statusCode = 200}) async {
+  Future<void> html(String s, {int statusCode = 200}) async {
     await _writeResponse(s,
         contentType: ContentType.html, statusCode: statusCode);
   }
 
   /// Writes given [object] as JSON response.
-  Future<void> JSON(dynamic object, {int statusCode = 200}) async {
+  Future<void> json(dynamic object, {int statusCode = 200}) async {
     await _writeResponse(jsonEncode(object),
         contentType: ContentType.json, statusCode: statusCode);
   }

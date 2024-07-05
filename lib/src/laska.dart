@@ -13,10 +13,10 @@ import 'package:laska/src/config.dart';
 class Laska {
   Configuration? config;
 
-  var before_startup = Event<StartupEventArgs>();
-  var after_startup = Event<StartupEventArgs>();
-  var before_teardown = Event<TeardownEventArgs>();
-  var after_teardown = Event<TeardownEventArgs>();
+  var beforeStartup = Event<StartupEventArgs>();
+  var afterStartup = Event<StartupEventArgs>();
+  var beforeTeardown = Event<TeardownEventArgs>();
+  var afterTeardown = Event<TeardownEventArgs>();
 
   Laska(
       {this.config,
@@ -40,25 +40,25 @@ class Laska {
 
   /// Registers a new GET route for a `path` with matching `handler` in the router
   /// with optional route-level `middlewares`.
-  void GET(String path, Function handler, {Set<Middleware>? middlewares}) {
+  void get(String path, Function handler, {Set<Middleware>? middlewares}) {
     any('GET', path, handler, middlewares: middlewares);
   }
 
   /// Registers a new POST route for a `path` with matching `handler` in the router
   /// with optional route-level `middlewares`.
-  void POST(String path, Function handler, {Set<Middleware>? middlewares}) {
+  void post(String path, Function handler, {Set<Middleware>? middlewares}) {
     any('POST', path, handler, middlewares: middlewares);
   }
 
   /// Registers a new PUT route for a `path` with matching `handler` in the router
   /// with optional route-level `middlewares`.
-  void PUT(String path, Function handler, {Set<Middleware>? middlewares}) {
+  void put(String path, Function handler, {Set<Middleware>? middlewares}) {
     any('PUT', path, handler, middlewares: middlewares);
   }
 
   /// Registers a new DELETE route for a `path` with matching `handler` in the router
   /// with optional route-level `middlewares`.
-  void DELETE(String path, Function handler, {Set<Middleware>? middlewares}) {
+  void delete(String path, Function handler, {Set<Middleware>? middlewares}) {
     any('DELETE', path, handler, middlewares: middlewares);
   }
 
@@ -70,7 +70,7 @@ class Laska {
   }
 
   // Attach middleware to request processing pipeline
-  void Use(Middleware middleware) {
+  void use(Middleware middleware) {
     if (!config!.middlewares!.contains(middleware)) {
       config!.middlewares?.add(middleware);
     }
@@ -78,7 +78,7 @@ class Laska {
 }
 
 Future run(Laska app) async {
-  app.before_startup.broadcast(StartupEventArgs(app));
+  app.beforeStartup.broadcast(StartupEventArgs(app));
 
   // Store out workers
   var workers = <Worker>[];
@@ -98,17 +98,17 @@ Future run(Laska app) async {
   var sendPort = (await receivePort.first as SendPort);
   sendPort.send(app);
 
-  app.after_startup.broadcast(StartupEventArgs(app));
+  app.afterStartup.broadcast(StartupEventArgs(app));
 
-  print('=> http server started on '
-      '${app.config!.address}:${app.config!.port}');
+  log('=> http server started on '
+      'http://${app.config!.address}:${app.config!.port}');
 }
 
 Future _startServer(SendPort sendPort) async {
   var receivePort = ReceivePort();
   sendPort.send(receivePort.sendPort);
 
-  var server;
+  Server server;
   receivePort.listen((message) async {
     // If we've got a message with configuration
     // then start a server to listen connections

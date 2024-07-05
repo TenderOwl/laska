@@ -84,7 +84,6 @@ class Server {
           // If the handler still not null we can safely call it.
           await handler(context);
         } catch (exception) {
-          // TODO: no prints! in production code
           // log(exception.toString());
           log(exception.toString());
           await sendInternalError(context);
@@ -110,16 +109,16 @@ class Server {
 
   Future sendInternalError(Context context) async {
     context.response!.statusCode = HttpStatus.internalServerError;
-    await context.Text('Internal Server Error',
+    await context.text('Internal Server Error',
         statusCode: HttpStatus.internalServerError);
   }
 
   Future sendNotFound(Context context) async {
-    await context.Text('Not Found', statusCode: HttpStatus.notFound);
+    await context.text('Not Found', statusCode: HttpStatus.notFound);
   }
 
   Future sendMethodNotAllowed(Context context) async {
-    await context.Text('Method Not Allowed',
+    await context.text('Method Not Allowed',
         statusCode: HttpStatus.methodNotAllowed);
   }
 }

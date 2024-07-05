@@ -28,7 +28,7 @@ List<Todo> todos = [
 ];
 
 void main(List<String> args) async {
-  final app = Laska()..GET('/', (context) => context.Text('Hello, world.'));
+  final app = Laska()..get('/', (context) => context.Text('Hello, world.'));
 
   await run(app);
 }

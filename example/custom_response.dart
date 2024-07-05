@@ -49,8 +49,8 @@ void main(List<String> args) async {
   final laska = Laska();
 
   // 4. Add routes to get and add a new tasks.
-  laska.GET('/tasks', getTasks);
-  laska.POST('/tasks', putTask);
+  laska.get('/tasks', getTasks);
+  laska.post('/tasks', putTask);
 
   // 7. Run the application
   await run(laska);
@@ -58,12 +58,12 @@ void main(List<String> args) async {
 
 void getTasks(Context context) async {
   // 5. Return todos list.
-  await context.JSON(APIResponse(data: todos));
+  await context.json(APIResponse(data: todos));
 }
 
 void putTask(Context context) async {
   // 6. Read text and id from JSON body and put into todos list.
   todos.add(Todo(id: '3', text: 'New todo'));
-  await context.JSON(APIResponse(status: {'status': 'created'}),
+  await context.json(APIResponse(status: {'status': 'created'}),
       statusCode: HttpStatus.created);
 }
