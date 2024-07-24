@@ -38,6 +38,8 @@ void main(List<String> args) async {
   laska.get('/tasks', getTasks);
   laska.get('/tasks/:id', getTask);
   laska.post('/tasks', putTask);
+  // 4.1 Add a catch-all route
+  laska.get('*', (context) => context.text('Not found', statusCode: 404));
 
   // 9. Run the application
   await run(laska);

@@ -26,8 +26,8 @@ class Laska {
       Router? router}) {
     // Init configuration
     config ??= Configuration()
-      ..address
-      ..port
+      ..address = address
+      ..port = port
       ..isolatesCount = isolateCount ?? Platform.numberOfProcessors
       ..middlewares = <Middleware>{}
       ..router = router ?? Router();
