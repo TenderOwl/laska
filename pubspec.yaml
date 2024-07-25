@@ -1,6 +1,6 @@
 name: laska
 description: A simple command-line application.
-# version: 1.0.0
+version: 0.1.0-wip
 homepage: https://tenderowl.com/work/laska
 
 environment:
