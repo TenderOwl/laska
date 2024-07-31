@@ -63,4 +63,12 @@ void main() {
   test('Custom method (HEAD) route found', () {
     expect(router.lookup('/custom')?.handlers.containsKey('HEAD'), isTrue);
   });
+
+  test('Multiple methods handlers', () {
+    router.get('/multiple', () {});
+    router.post('/multiple', () {});
+    expect(router.lookup('/multiple')?.handlers.containsKey('GET'), isTrue);
+    expect(router.lookup('/multiple')?.handlers.containsKey('POST'), isTrue);
+    expect(router.lookup('/multiple')?.handlers.containsKey('DELETE'), isFalse);
+  });
 }
