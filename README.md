@@ -41,21 +41,21 @@ void main() async {
   final laska = Laska();
 
   // Set global BasicAuth middleware 
-  laska.Use(BasicAuth('laska', 'ermine', realm: 'Access to private zone'));
+  laska.use(BasicAuth('laska', 'ermine', realm: 'Access to private zone'));
 
-  laska.GET('/users/:userId', getUserById);
-  laska.POST('/users/', createUser);
+  laska.get('/users/:userId', getUserById);
+  laska.post('/users/', createUser);
 
   // Start server
   await run(laska);
 }
 
 void getUserById(Context context) async {
-  await context.HTML('User: <b>${context.params['userId']}</b>');
+  await context.html('User: <b>${context.params['userId']}</b>');
 }
 
 void createUser(Context context) async {
-  await context.JSON({'status': 'created'}, statusCode: HttpStatus.created);
+  await context.json({'status': 'created'}, statusCode: HttpStatus.created);
 }
 ```
 
