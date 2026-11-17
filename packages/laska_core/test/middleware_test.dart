@@ -91,6 +91,23 @@ void main() {
       expect(record['level'], 'error');
       expect(record['message'], 'request failed');
     });
+
+    test('writes the trace of the request', () async {
+      final lines = <String>[];
+      final logger = Logger(sink: lines.add);
+      final middleware = loggingMiddleware(logger);
+      final request = _request('GET', '/users');
+      request.traceContext = const SpanContext(
+        traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
+        spanId: '00f067aa0ba902b7',
+      );
+
+      await middleware(request, () async => _ok(_context()));
+
+      final record = jsonDecode(lines.single) as Map<String, Object?>;
+      expect(record['trace_id'], '4bf92f3577b34da6a3ce929d0e0e4736');
+      expect(record['span_id'], '00f067aa0ba902b7');
+    });
   });
 
   group('corsMiddleware', () {

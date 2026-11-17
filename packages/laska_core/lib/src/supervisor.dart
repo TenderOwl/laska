@@ -27,7 +27,9 @@ class SupervisorOptions {
     this.port = 3789,
     this.drainTimeout = const Duration(seconds: 30),
     this.restartDelay = const Duration(seconds: 1),
+    this.maxRestarts = 5,
     this.environment = const <String, String>{},
+    this.label,
     this.logger,
   });
 
@@ -52,11 +54,22 @@ class SupervisorOptions {
   /// How long the supervisor waits before restarting a crashed worker.
   final Duration restartDelay;
 
+  /// How often a worker may be restarted before the supervisor gives up.
+  ///
+  /// The counter is reset when a worker ran long enough, so a worker that
+  /// crashes once in a while is not abandoned.
+  final int maxRestarts;
+
   /// Extra environment variables given to every worker.
   ///
   /// The variables of the supervisor are inherited, so a worker sees the
   /// configuration of the service.
   final Map<String, String> environment;
+
+  /// The label written in front of the log lines of the workers.
+  ///
+  /// It tells the logs of the services of a workspace apart.
+  final String? label;
 
   /// The logger of the supervisor.
   final Logger? logger;
@@ -77,6 +90,8 @@ class Supervisor {
   final SupervisorOptions options;
 
   final Map<int, Process> _workers = <int, Process>{};
+  final Map<int, int> _failures = <int, int>{};
+  final Map<int, DateTime> _startedAt = <int, DateTime>{};
   bool _shuttingDown = false;
   Completer<void>? _finished;
 
@@ -86,11 +101,29 @@ class Supervisor {
     if (configured != null) {
       return configured;
     }
+    if (!supportsSharedPort) {
+      // The platform has no SO_REUSEPORT, so two processes cannot bind the
+      // same port. The service runs with a single worker there.
+      return 1;
+    }
     return Platform.numberOfProcessors.clamp(1, 8);
   }
 
+  /// Whether the platform lets several processes bind the same port.
+  ///
+  /// POSIX systems have SO_REUSEPORT, so the kernel balances the connections
+  /// between the workers. Windows has no such option: two processes cannot
+  /// listen on the same port, so the service runs with a single worker.
+  static bool get supportsSharedPort => !Platform.isWindows;
+
   /// The number of workers that are currently running.
   int get runningWorkers => _workers.length;
+
+  /// The workers the supervisor gave up on, because they kept crashing.
+  List<int> get abandonedWorkers => _failures.entries
+      .where((entry) => entry.value > options.maxRestarts)
+      .map((entry) => entry.key)
+      .toList();
 
   /// Starts the workers and waits until the supervisor is stopped.
   Future<void> run() async {
@@ -100,6 +133,13 @@ class Supervisor {
     options.logger?.info(
       'starting $workerCount worker(s) on ${options.address}:${options.port}',
     );
+
+    if (workerCount > 1 && !supportsSharedPort) {
+      options.logger?.warning(
+        'This platform cannot share a port between processes, so only one '
+        'worker can listen on ${options.address}:${options.port}.',
+      );
+    }
 
     for (var id = 0; id < workerCount; id++) {
       await _startWorker(id);
@@ -167,6 +207,7 @@ class Supervisor {
     );
 
     _workers[id] = process;
+    _startedAt[id] = DateTime.now();
 
     process.stdout
         .transform(utf8.decoder)
@@ -183,6 +224,21 @@ class Supervisor {
         if (_shuttingDown) {
           return;
         }
+
+        final uptime =
+            DateTime.now().difference(_startedAt[id] ?? DateTime.now());
+        final failures =
+            uptime > const Duration(minutes: 1) ? 1 : (_failures[id] ?? 0) + 1;
+        _failures[id] = failures;
+
+        if (failures > options.maxRestarts) {
+          options.logger?.error(
+            'worker $id failed $failures times in a row, the supervisor '
+            'gives up on it',
+          );
+          return;
+        }
+
         options.logger?.warning('worker $id exited with code $code');
         await Future<void>.delayed(options.restartDelay);
         if (!_shuttingDown) {
@@ -194,7 +250,8 @@ class Supervisor {
 
   void _forward(int id, String line) {
     options.logger?.debug('worker $id: $line');
-    stdout.writeln('[$id] $line');
+    final label = options.label;
+    stdout.writeln(label == null ? '[$id] $line' : '[$label $id] $line');
   }
 
   void _installSignalHandlers() {

@@ -297,9 +297,12 @@ class UsersServiceClient {
     required this.baseUrl,
     http.Client? httpClient,
     Duration timeout = const Duration(seconds: 2),
+    Tracer? tracer,
   }) : _http = httpClient ?? http.Client(),
        // ignore: prefer_initializing_formals
-       _timeout = timeout;
+       _timeout = timeout,
+       // ignore: prefer_initializing_formals
+       _tracer = tracer;
 
   /// Base URL of the service, e.g. `http://localhost:8080`.
   final String baseUrl;
@@ -307,19 +310,44 @@ class UsersServiceClient {
   final http.Client _http;
   final Duration _timeout;
 
+  /// The tracer of the client, when the calls are traced.
+  final Tracer? _tracer;
+
   /// GetUser returns a single user by its identifier.
   Future<User> getUser(GetUserRequest request) async {
     final uri = Uri.parse(
       '$baseUrl/v1/users/${Uri.encodeComponent(request.id.toString())}',
     );
 
-    final response = await _http
-        .get(uri, headers: const <String, String>{'accept': 'application/json'})
-        .timeout(_timeout);
-    if (response.statusCode >= 400) {
-      throw LaskaApiException(response.statusCode, response.body);
+    final headers = <String, String>{'accept': 'application/json'};
+
+    final tracer = _tracer;
+    final span = tracer?.startSpan(
+      'UsersService.GetUser',
+      kind: SpanKind.client,
+      attributes: <String, Object?>{
+        'rpc.service': 'UsersService',
+        'rpc.method': 'GetUser',
+      },
+    );
+
+    if (tracer != null && span != null) {
+      tracer.inject(span.context, headers);
     }
-    return User.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+
+    try {
+      final response = await _http.get(uri, headers: headers).timeout(_timeout);
+      span?.setAttribute('http.response.status_code', response.statusCode);
+      if (response.statusCode >= 400) {
+        throw LaskaApiException(response.statusCode, response.body);
+      }
+      return User.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    } catch (error, stackTrace) {
+      span?.recordError(error, stackTrace);
+      rethrow;
+    } finally {
+      span?.end();
+    }
   }
 
   /// ListUsers returns a page of users.
@@ -331,34 +359,76 @@ class UsersServiceClient {
     final uri = Uri.parse('$baseUrl/v1/users')
         .replace(queryParameters: query.isEmpty ? null : query);
 
-    final response = await _http
-        .get(uri, headers: const <String, String>{'accept': 'application/json'})
-        .timeout(_timeout);
-    if (response.statusCode >= 400) {
-      throw LaskaApiException(response.statusCode, response.body);
-    }
-    return ListUsersResponse.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
+    final headers = <String, String>{'accept': 'application/json'};
+
+    final tracer = _tracer;
+    final span = tracer?.startSpan(
+      'UsersService.ListUsers',
+      kind: SpanKind.client,
+      attributes: <String, Object?>{
+        'rpc.service': 'UsersService',
+        'rpc.method': 'ListUsers',
+      },
     );
+
+    if (tracer != null && span != null) {
+      tracer.inject(span.context, headers);
+    }
+
+    try {
+      final response = await _http.get(uri, headers: headers).timeout(_timeout);
+      span?.setAttribute('http.response.status_code', response.statusCode);
+      if (response.statusCode >= 400) {
+        throw LaskaApiException(response.statusCode, response.body);
+      }
+      return ListUsersResponse.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    } catch (error, stackTrace) {
+      span?.recordError(error, stackTrace);
+      rethrow;
+    } finally {
+      span?.end();
+    }
   }
 
   /// CreateUser creates a new user.
   Future<User> createUser(CreateUserRequest request) async {
     final uri = Uri.parse('$baseUrl/v1/users');
 
-    final response = await _http
-        .post(
-          uri,
-          headers: const <String, String>{
-            'accept': 'application/json',
-            'content-type': 'application/json',
-          },
-          body: jsonEncode(request.toJson()),
-        )
-        .timeout(_timeout);
-    if (response.statusCode >= 400) {
-      throw LaskaApiException(response.statusCode, response.body);
+    final headers = <String, String>{
+      'accept': 'application/json',
+      'content-type': 'application/json',
+    };
+
+    final tracer = _tracer;
+    final span = tracer?.startSpan(
+      'UsersService.CreateUser',
+      kind: SpanKind.client,
+      attributes: <String, Object?>{
+        'rpc.service': 'UsersService',
+        'rpc.method': 'CreateUser',
+      },
+    );
+
+    if (tracer != null && span != null) {
+      tracer.inject(span.context, headers);
     }
-    return User.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+
+    try {
+      final response = await _http
+          .post(uri, headers: headers, body: jsonEncode(request.toJson()))
+          .timeout(_timeout);
+      span?.setAttribute('http.response.status_code', response.statusCode);
+      if (response.statusCode >= 400) {
+        throw LaskaApiException(response.statusCode, response.body);
+      }
+      return User.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    } catch (error, stackTrace) {
+      span?.recordError(error, stackTrace);
+      rethrow;
+    } finally {
+      span?.end();
+    }
   }
 }

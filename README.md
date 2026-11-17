@@ -17,16 +17,16 @@ The long-term design and the roadmap behind these points live in [PLAN.md](PLAN.
 
 ## Current state
 
-Active development, **not for production use**. The core runtime and the contract pipeline are
-implemented and working end to end (see below); observability, resilience and the multi-service
-workspace are still to come.
+Active development, **not for production use**. The core runtime, the contract pipeline and the
+observability layer are implemented and working end to end (see below); resilience, the
+multi-service workspace and the foreign-language SDKs are still to come.
 
 | Package | What it holds |
 |---|---|
-| `packages/laska_core` | The runtime: routing, middleware, request/response, problem documents, config, logging, the supervisor and the data layer. |
+| `packages/laska_core` | The runtime: routing, middleware, request/response, problem documents, config, logging, the supervisor, the data layer and the telemetry. |
 | `packages/laska_contracts` | The contract pipeline: proto parser, code generator, OpenAPI export, breaking-change detection. |
 | `packages/laska_cli` | The `laska` command line interface. |
-| `packages/laska_test` | The test harness: an in-process HTTP client, expectation helpers and database helpers. |
+| `packages/laska_test` | The test harness: an in-process HTTP client, expectation helpers, database helpers and a fake tracer. |
 | `example/contract_slice` | A working vertical slice: contract → generated code → service → client. |
 
 ## Quick start
@@ -137,12 +137,77 @@ BREAKING  users.v1.User.email: field was removed
 
 The command exits with code `1` when a breaking change is found, so a pipeline fails on it.
 
+## Observability
+
+One call wires the whole stack — request ids, tracing, metrics, the request log and the health
+probes — into the service:
+
+```dart
+final app = Laska();
+
+Observability.install(
+  app,
+  logger: Logger(service: 'users', version: '0.1.0'),
+);
+
+registerUsersService(app, UsersServiceImpl());
+
+await run(app, arguments: arguments);
+```
+
+The service writes no instrumentation code:
+
+- **Tracing** — every request gets a server span, every outgoing call a client span, every SQL
+  statement a span. The trace continues across services: the generated client writes the
+  `traceparent` header and the receiving service continues that trace, so a request through two
+  services is one trace.
+- **Metrics** — `/metrics` in the Prometheus text format, with the request count and the duration
+  by route.
+- **Probes** — `/healthz` (liveness) and `/readyz` (readiness, gated on the database).
+- **Logs** — one JSON object per line, correlated with `request_id`, `trace_id` and `span_id`.
+  `ctx.logger` carries the context of the request.
+
+The tracer is an abstraction (`Tracer`), so the OpenTelemetry SDK can be replaced without touching
+the runtime. The configuration uses the standard environment variables:
+
+```console
+$ export OTEL_SERVICE_NAME=users
+$ export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+```
+
+### The workspace runner
+
+`laska dev` starts every service of the workspace, aggregates their logs in one stream and points
+them at a local collector that prints the traces it receives:
+
+```yaml
+# laska.yaml
+services:
+  - name: users
+    entrypoint: services/users/bin/server.dart
+    port: 8080
+  - name: orders
+    entrypoint: services/orders/bin/server.dart
+    port: 8081
+```
+
+```console
+$ dart run laska_cli:laska dev
+=> collector on http://127.0.0.1:4318
+=> users on http://127.0.0.1:8080
+=> orders on http://127.0.0.1:8081
+=> 2 service(s) started. Press Ctrl+C to stop.
+[users 0] {"time":"...","level":"info","service":"users","message":"request",...}
+collector: trace 4bf92f35 span 00f067aa http.server 12.4ms
+```
+
 ## The command line interface
 
 ```
 laska contract compile   --proto <dir> --out <dir> [--title <t>] [--version <v>]
 laska contract diff      --base <dir> --candidate <dir> [--quiet]
 laska serve              [--entrypoint <file>] [--workers <n>] [--address <addr>] [--port <port>]
+laska dev                [--manifest <file>] [--entrypoint <file>] [--collector-port <port>]
 laska route:list         [--entrypoint <file>]
 laska migrate:run        [--entrypoint <file>] [--directory <dir>]
 ```
@@ -152,9 +217,10 @@ between them, restarts the ones that crash and stops them all on a signal. `lask
 prints the route table of the service, and `laska migrate:run` applies the pending SQL migrations.
 
 > **Platform note.** On POSIX systems the workers share the port with SO_REUSEPORT and the kernel
-> balances the connections between them. On Windows it is SO_REUSEADDR, which does not balance —
-> the connections may all land on one worker — and the graceful stop is weaker, because a signal
-> terminates the worker immediately instead of letting it drain.
+> balances the connections between them. Windows has no such option: two processes cannot listen on
+> the same port, so the supervisor runs a **single worker** there and says so in the log. The
+> graceful stop is weaker on Windows as well, because a signal terminates the worker immediately
+> instead of letting it drain.
 
 ## The runtime
 

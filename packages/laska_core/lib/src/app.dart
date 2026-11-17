@@ -1,5 +1,6 @@
 import 'db/database.dart';
 import 'dispatcher.dart';
+import 'logger.dart';
 import 'middleware.dart';
 import 'response.dart';
 import 'router.dart';
@@ -41,6 +42,13 @@ class Laska {
   /// The migration runner needs it, so a service registers its database here
   /// and `laska migrate:run` can find it.
   Database? database;
+
+  /// The logger of the service.
+  ///
+  /// The observability stack replaces it with the logger of the service, and
+  /// the handlers reach it through `ctx.logger`, which correlates the records
+  /// with the request.
+  Logger logger = Logger();
 
   /// The directory holding the migration files.
   String migrationsDirectory = 'migrations';

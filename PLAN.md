@@ -4,12 +4,14 @@
 > One contract → typed server stubs + typed clients in any language, observability and
 > resilience built in, one binary to deploy.
 
-**Status (2026-11-17):** Phase 1 (core runtime) and Phase 2 (contract pipeline) are
-implemented. The runtime has a router with parameter constraints and named routes, an explicit
-middleware chain, RFC 9457 error rendering, config + structured logging, a graceful shutdown with a
-worker supervisor, a thin `Db` layer with SQL migrations and a test harness that exercises a
-service in process. The contract pipeline ships with a **pure-Dart `.proto` parser** instead of
-`protoc`, which removes the native toolchain from the critical path entirely (§4.3). See §6 for
+**Status (2026-11-17):** Phase 1 (core runtime), Phase 2 (contract pipeline) and Phase 3
+(observability) are implemented. The runtime has a router with parameter constraints and named
+routes, an explicit middleware chain, RFC 9457 error rendering, config + structured logging, a
+graceful shutdown with a worker supervisor, a thin `Db` layer with SQL migrations and a test
+harness that exercises a service in process. The contract pipeline ships with a **pure-Dart
+`.proto` parser** instead of `protoc`, which removes the native toolchain from the critical path
+entirely (§4.3). The observability layer traces a request through the services it touches,
+exports Prometheus metrics and serves the health probes, with one call to install it. See §6 for
 what is done and what is left.
 
 ---
@@ -106,9 +108,10 @@ SQL migrations · auth (JWT / session / API key) · rate limiting · CLI · test
 **Test coverage then:** the router only. Nothing exercised the server, the middleware chain,
 error paths, or the isolate model.
 
-**Test coverage now:** 166 tests across five packages — the router, the dispatcher, the middleware
+**Test coverage now:** 205 tests across five packages — the router, the dispatcher, the middleware
 chain, the config and the logger, the server and its graceful drain, the supervisor with real
-worker processes, the database layer and the migration runner, the test harness and the CLI.
+worker processes, the database layer and the migration runner, the tracing and the metrics, the
+OpenTelemetry adapter, the health probes, the test harness and the CLI.
 
 ---
 
@@ -185,18 +188,18 @@ All packages version in lockstep. The umbrella package `laska` pins the rest.
 - Each worker is a separate OS process running **one** Dart isolate → in-process state (DB pool,
   session store, cache, in-flight rate-limit counters) is coherent within a worker.
 - Workers bind the same port via `HttpServer.bind(..., shared: true)` (SO_REUSEPORT where the OS
-  supports it). Where it is unavailable, the supervisor falls back to `SO_REUSEADDR` with accept
-  balancing at the supervisor level.
+  supports it).
 - Worker count defaults to `min(cores, 8)`, overridable by `--workers` / `LASKA_WORKERS`.
 - Health: supervisor restarts crashed workers, drains on SIGTERM (graceful shutdown: stop accepting,
   finish in-flight requests within a timeout, flush queues, close pools).
 - **Every app must be safe to run as N processes.** No in-process global state as a source of truth.
 
 **Platform notes.** On POSIX systems `shared: true` is SO_REUSEPORT and the kernel balances the
-connections between the workers. **On Windows it is SO_REUSEADDR**, which does not balance: the
-connections may all land on one worker, and the port cannot be bound twice without it. The
-graceful stop is also weaker there, because `Process.kill` terminates the worker immediately
-instead of delivering SIGTERM. Both limitations are Windows-only and are documented in the README.
+connections between the workers. **Windows has no SO_REUSEPORT**: two processes cannot listen on
+the same port, so the supervisor runs a single worker there and says so in the log. The graceful
+stop is also weaker there, because `Process.kill` terminates the worker immediately instead of
+delivering SIGTERM. A worker that keeps crashing is abandoned after `maxRestarts` tries, so a
+misconfigured service fails visibly instead of looping forever.
 
 *Consequence to document loudly:* this replaces the old isolate model, so `Laska` objects are no
 longer shipped across isolates — a worker gets its own app instance built in-process.
@@ -401,15 +404,16 @@ Dart has no runtime reflection, so constructor injection cannot be resolved at r
 
 The whole observability stack is one contract: **OTel in, Prometheus out, logs correlated.**
 
-- **Tracing**: integrate `dartastic_opentelemetry` (Apache-2.0) as the default implementation
-  behind an internal `Tracer` abstraction, so the SDK can be swapped when the official Dart OTel
-  SDK (currently in donation review at the OpenTelemetry project) lands. Traces, metrics and logs
-  with OTLP/gRPC and OTLP/HTTP exporters.
+- **Tracing**: `laska_core` owns a `Tracer` abstraction; the OpenTelemetry SDK
+  (`dartastic_opentelemetry`, Apache-2.0) is the default implementation behind it, so the SDK can
+  be swapped when the official Dart OTel SDK lands. Traces, metrics and logs with OTLP/gRPC and
+  OTLP/HTTP exporters.
 - **Auto-instrumentation**: the framework creates spans for inbound requests, outbound service
-  calls, SQL queries (via a driver wrapper) and queue jobs. Users get a useful trace without
-  writing a single span.
+  calls, SQL queries (via the `TracingDatabase` wrapper) and queue jobs. Users get a useful trace
+  without writing a single span.
 - **Logs**: structured JSON with `trace_id`, `span_id`, `service`, `version` and `request_id`
-  on every line, so `laska dev` and any log aggregator can join them.
+  on every line, so `laska dev` and any log aggregator can join them. `ctx.logger` carries the
+  context of the request.
 - **Metrics**: `/metrics` in Prometheus text format — request count/latency by route, error rate,
   dependency call latency, pool saturation.
 - **Probes**: `/healthz` (liveness) and `/readyz` (readiness, gated on DB/queue state).
@@ -419,6 +423,11 @@ The whole observability stack is one contract: **OTel in, Prometheus out, logs c
 **Why this is a differentiator:** Dart is still the last top-15 language without an officially
 maintained OTel SDK. A framework that ships OTel as a first-class, opinionated part of the
 runtime turns a gap in the ecosystem into the framework's reason to exist.
+
+**The cost of the choice:** `laska_core` now depends on the OpenTelemetry SDK, which pulls in
+`grpc` and `protobuf`. The runtime stays pure Dart — no native toolchain — but the dependency
+tree of every service grew. If the SDK weight turns out to matter, the abstraction is the seam:
+the implementation moves to its own package without a change in the API.
 
 ### 4.12 Inter-service calls and resilience
 
@@ -482,6 +491,9 @@ and gains an ORM-independent schema, no codegen step, and no framework lock-in o
 - `LaskaServer` — `dart:io` server with an in-flight drain and a graceful `stop()`.
 - `Supervisor` — worker processes on a shared port, restart of crashed workers, graceful stop.
 - `Database` over `package:postgres` and `package:sqlite3`, plus the SQL migration runner.
+- Telemetry: the `Tracer` abstraction with the OpenTelemetry implementation, the `Meter` with a
+  Prometheus exposition, `TracingDatabase`, the tracing and the metrics middleware, the health
+  probes and `Observability.install(app)`.
 
 *Planned:*
 
@@ -598,16 +610,26 @@ document and a CI check that fails on a breaking change — **done**; the gRPC t
 the foreign-language SDKs are what is left.
 
 
-### Phase 3 — Observability (10–14 days)
+### Phase 3 — Observability (10–14 days) — **done**
 
-- [ ] `Tracer` abstraction + `dartastic_opentelemetry` implementation; `OTEL_*` env configuration.
-- [ ] Auto-instrumentation: inbound requests, outbound calls, SQL, queue jobs.
-- [ ] Structured logs correlated by `trace_id`/`span_id`/`request_id`.
-- [ ] Prometheus `/metrics`, `/healthz`, `/readyz`.
-- [ ] `laska dev` workspace runner with aggregated logs and a local collector.
+- [x] `Tracer` abstraction inside `laska_core`; the OpenTelemetry SDK
+      (`dartastic_opentelemetry`) is the default implementation behind it, so it can be replaced.
+- [x] `OTEL_*` environment configuration: `OTEL_SERVICE_NAME`,
+      `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_TRACES_SAMPLER_ARG`, `OTEL_SDK_DISABLED`.
+- [x] Auto-instrumentation: a server span per request, a client span per outgoing call
+      (the generated client writes the `traceparent` header), a span per SQL statement
+      (`TracingDatabase`). The spans of the queue jobs come with the queue backend of Phase 4.
+- [x] Structured logs correlated by `trace_id`/`span_id`/`request_id` — `ctx.logger` carries
+      the context of the request.
+- [x] Prometheus `/metrics`, `/healthz` and `/readyz`.
+- [x] `laska dev` — the workspace runner with aggregated logs and a local collector that
+      prints the traces it receives.
 
 **Done when:** a request through two services shows up as one trace, with metrics and correlated
-logs, with no instrumentation code written by the user.
+logs, with no instrumentation code written by the user — **done**. The behaviour is pinned by the
+integration test `example/contract_slice/test/observability_test.dart`: the client span and the
+server span of a call share the trace id, because the generated client writes the `traceparent`
+header and the server continues that trace.
 
 ### Phase 4 — Inter-service & resilience (12–16 days)
 
@@ -667,6 +689,7 @@ tracing, resilience and passing tests — this is **v1.0**.
 
 | Risk | Impact | Mitigation |
 |---|---|---|
+| `laska_core` depends on the OpenTelemetry SDK, which pulls in `grpc` and `protobuf` | Every service carries a bigger dependency tree | The `Tracer` abstraction is the seam: the implementation can move to its own package without a change in the API. The SDK stays pure Dart, so the AOT binary still has no native toolchain |
 | The pure-Dart parser drifts from the protobuf specification | Contracts compile here but not with `protoc` | The parser only claims the subset it implements and errors out on everything else; `protoc` stays available as a CI cross-check |
 | The parser has to grow with protobuf (`oneof`, `map`, well-known types) | Growing maintenance surface | Each addition is a separate, testable step; the contract model does not change when the parser does |
 | Foreign-language SDK generation is a maintenance multiplier | Cost per language | Orchestrate upstream protoc plugins; do not maintain our own codegen per language |
@@ -699,23 +722,23 @@ Resolve during the relevant phase, not now:
 
 ## 10. Immediate next steps
 
-Phase 1 (core runtime) and Phase 2 (contract pipeline, vertical slice) are implemented. The next
-phase is Phase 3 — observability — because the middleware chain is already the single
-instrumentation point, so tracing and metrics can be added without touching the public API.
+Phase 1 (core runtime), Phase 2 (contract pipeline) and Phase 3 (observability) are implemented.
+The next phase is Phase 4 — inter-service calls and resilience — because the telemetry layer now
+measures the latency of the dependencies, so the timeouts and the retries show up in the traces.
 
-1. **Phase 3 — the `Tracer`/`Meter` abstraction** over `dartastic_opentelemetry`, with the
-   `OTEL_*` environment variables, so an existing collector works without Laska-specific setup.
-2. **Auto-instrumentation as built-in middleware**: spans for inbound requests and outbound calls,
-   `trace_id`/`span_id`/`request_id` on every log line, SQL spans around the `Database` layer.
-3. **`/metrics` in the Prometheus text format**, `/healthz` (liveness) and `/readyz` (readiness,
-   gated on the database) — registered by the framework, not by the service.
-4. **`laska dev`** — the workspace runner with aggregated logs and a local collector. This is the
-   command that delivers the "one command instead of five tools" promise in practice.
+1. **Typed clients with per-method defaults** — the generated client already carries the tracer
+   and the timeout; it needs the retry policy and the circuit breaker of the contract.
+2. **Retry with backoff and jitter**, only for the idempotent methods, honouring `Retry-After`.
+3. **Circuit breaker and bulkhead** — a per-dependency concurrency limit, so one slow dependency
+   cannot exhaust the process.
+4. **Idempotency keys** — propagated end to end and honoured by the handler.
 5. **Foreign-language client generation** (`--lang=go` first) — it closes the loop with the
    polyglot audience that the whole positioning rests on.
+6. **`laska.yaml` beyond the service list** — the workspace manifest grows the commands, the
+   environment and the dependencies of the workspace (Phase 5).
 
-Deferred to Phase 4+: resilience primitives (retry, circuit breaker, bulkhead, idempotency),
-the gRPC transport, the binary protobuf codec, and the DI container.
+Deferred to Phase 5+: the deployment artefacts, the documentation site and the release
+hardening.
 
 ---
 

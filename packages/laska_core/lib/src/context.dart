@@ -1,4 +1,5 @@
 import 'app.dart';
+import 'logger.dart';
 import 'request.dart';
 import 'response.dart';
 
@@ -12,6 +13,18 @@ class Context {
 
   /// The application the request is being handled by.
   final Laska app;
+
+  /// The logger of the service, correlated with the request.
+  ///
+  /// Every record holds the id of the request and, when the request is traced,
+  /// the id of the trace and of the span.
+  Logger get logger => app.logger.child(<String, Object?>{
+        if (request.id != null) 'request_id': request.id,
+        if (request.traceContext != null)
+          'trace_id': request.traceContext!.traceId,
+        if (request.traceContext != null)
+          'span_id': request.traceContext!.spanId,
+      });
 
   /// Route parameters captured by the router.
   Map<String, String> get params => request.params;

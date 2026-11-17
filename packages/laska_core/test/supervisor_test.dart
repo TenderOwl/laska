@@ -50,10 +50,42 @@ void main() {
         ),
       );
 
-      expect(
-        supervisor.workerCount,
-        Platform.numberOfProcessors.clamp(1, 8),
+      if (Supervisor.supportsSharedPort) {
+        expect(
+          supervisor.workerCount,
+          Platform.numberOfProcessors.clamp(1, 8),
+        );
+      } else {
+        expect(supervisor.workerCount, 1);
+      }
+    });
+
+    test('knows whether the platform shares a port', () {
+      expect(Supervisor.supportsSharedPort, isNot(Platform.isWindows));
+    });
+
+    test('gives up on a worker that keeps crashing', () async {
+      final supervisor = Supervisor(
+        SupervisorOptions(
+          entrypoint: File('test/fixtures/crashing_worker.dart').absolute.path,
+          executable: Platform.resolvedExecutable,
+          workers: 1,
+          maxRestarts: 1,
+          restartDelay: const Duration(milliseconds: 50),
+          logger: Logger(sink: (_) {}),
+        ),
       );
+
+      final run = supervisor.run();
+      addTearDown(() async {
+        await supervisor.stop();
+        await run;
+      });
+
+      await waitFor(() => supervisor.abandonedWorkers.isNotEmpty);
+
+      expect(supervisor.abandonedWorkers, <int>[0]);
+      expect(supervisor.runningWorkers, 0);
     });
 
     test('uses the configured number of workers', () {

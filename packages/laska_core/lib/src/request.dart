@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'errors.dart';
+import 'telemetry/tracer.dart';
 
 /// An incoming HTTP request, decoupled from `dart:io`.
 class Request {
@@ -38,6 +39,15 @@ class Request {
 
   /// The id of the request, assigned by the request id middleware.
   String? id;
+
+  /// The trace the request belongs to, assigned by the tracing middleware.
+  SpanContext? traceContext;
+
+  /// The pattern of the matched route, e.g. `/users/:id`.
+  ///
+  /// The metrics use it instead of the path of the request, so the number of
+  /// the label values stays small.
+  String? routePattern;
 
   /// Returns the value of the [name] header, or `null` when it is absent.
   String? header(String name) => headers[name.toLowerCase()];
@@ -79,6 +89,8 @@ class Request {
       params: params ?? this.params,
     );
     copy.id = id;
+    copy.traceContext = traceContext;
+    copy.routePattern = routePattern;
     return copy;
   }
 }

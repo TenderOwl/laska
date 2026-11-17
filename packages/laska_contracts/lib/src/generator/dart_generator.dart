@@ -495,10 +495,13 @@ class DartGenerator {
     writer.write('required this.baseUrl,');
     writer.write('http.Client? httpClient,');
     writer.write('Duration timeout = const Duration(seconds: 2),');
+    writer.write('Tracer? tracer,');
     writer.dedent();
     writer.write('})  : _http = httpClient ?? http.Client(),');
     writer.write('      // ignore: prefer_initializing_formals');
-    writer.write('      _timeout = timeout;');
+    writer.write('      _timeout = timeout,');
+    writer.write('      // ignore: prefer_initializing_formals');
+    writer.write('      _tracer = tracer;');
     writer.blank();
     writer.write('/// Base URL of the service, e.g. `http://localhost:8080`.');
     writer.write('final String baseUrl;');
@@ -506,10 +509,13 @@ class DartGenerator {
     writer.write('final http.Client _http;');
     writer.write('final Duration _timeout;');
     writer.blank();
+    writer.write('/// The tracer of the client, when the calls are traced.');
+    writer.write('final Tracer? _tracer;');
+    writer.blank();
 
     for (final method in service.methods) {
       for (final rule in method.httpRules) {
-        _writeClientMethod(writer, method, rule);
+        _writeClientMethod(writer, service, method, rule);
       }
     }
 
@@ -517,7 +523,12 @@ class DartGenerator {
     writer.write('}');
   }
 
-  void _writeClientMethod(_Writer writer, Method method, HttpRule rule) {
+  void _writeClientMethod(
+    _Writer writer,
+    Service service,
+    Method method,
+    HttpRule rule,
+  ) {
     final requestField = _requestField(method);
     final requestType = _types.resolve(requestField);
     final responseType = _types.resolve(_responseField(method));
@@ -578,36 +589,60 @@ class DartGenerator {
     writer.blank();
 
     final verb = rule.method.toLowerCase();
+    final spanName = '${service.name}.${method.name}';
+
+    writer.write('final headers = <String, String>{');
+    writer.indent();
+    writer.write("'accept': 'application/json',");
+    if (verb != 'get' && verb != 'delete') {
+      writer.write("'content-type': 'application/json',");
+    }
+    writer.dedent();
+    writer.write('};');
+    writer.blank();
+    writer.write('final tracer = _tracer;');
+    writer.write('final span = tracer?.startSpan(');
+    writer.indent();
+    writer.write("'$spanName',");
+    writer.write('kind: SpanKind.client,');
+    writer.write('attributes: <String, Object?>{');
+    writer.indent();
+    writer.write("'rpc.service': '${service.name}',");
+    writer.write("'rpc.method': '${method.name}',");
+    writer.dedent();
+    writer.write('},');
+    writer.dedent();
+    writer.write(');');
+    writer.blank();
+    writer.write('if (tracer != null && span != null) {');
+    writer.indent();
+    writer.write('tracer.inject(span.context, headers);');
+    writer.dedent();
+    writer.write('}');
+    writer.blank();
+    writer.write('try {');
+
+    writer.write('final response = await _http');
+    writer.indent();
     if (verb == 'get' || verb == 'delete') {
-      writer.write('final response = await _http');
-      writer.indent();
-      writer.write(
-        ".$verb(uri, headers: const <String, String>{'accept': "
-        "'application/json'})",
-      );
-      writer.write('.timeout(_timeout);');
-      writer.dedent();
+      writer.write('.$verb(uri, headers: headers)');
     } else {
       final bodyExpression = rule.body == '*'
           ? 'request.toJson()'
           : 'request.${camelCase(rule.body!)}.toJson()';
-      writer.write('final response = await _http');
-      writer.indent();
-      writer.write('.$verb(');
-      writer.indent();
-      writer.write('uri,');
-      writer.write('headers: const <String, String>{');
-      writer.indent();
-      writer.write("'accept': 'application/json',");
-      writer.write("'content-type': 'application/json',");
-      writer.dedent();
-      writer.write('},');
-      writer.write('body: jsonEncode($bodyExpression),');
-      writer.dedent();
-      writer.write(')');
-      writer.write('.timeout(_timeout);');
-      writer.dedent();
+      writer.write(
+        '.$verb(uri, headers: headers, body: jsonEncode($bodyExpression))',
+      );
     }
+    writer.write('.timeout(_timeout);');
+    writer.dedent();
+
+    writer.write('span?.setAttribute(');
+    writer.indent();
+    writer.write("'http.response.status_code',");
+    writer.write('response.statusCode,');
+    writer.dedent();
+    writer.write(');');
 
     writer.write('if (response.statusCode >= 400) {');
     writer.indent();
@@ -627,6 +662,17 @@ class DartGenerator {
         'jsonDecode(response.body) as Map<String, dynamic>);',
       );
     }
+
+    writer.write('} catch (error, stackTrace) {');
+    writer.indent();
+    writer.write('span?.recordError(error, stackTrace);');
+    writer.write('rethrow;');
+    writer.dedent();
+    writer.write('} finally {');
+    writer.indent();
+    writer.write('span?.end();');
+    writer.dedent();
+    writer.write('}');
     writer.dedent();
     writer.write('}');
     writer.blank();

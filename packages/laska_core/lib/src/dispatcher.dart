@@ -41,14 +41,16 @@ class Dispatcher {
         );
       }
 
-      final context = Context(request.copyWith(params: match.params), app);
+      final scoped = request.copyWith(params: match.params);
+      scoped.routePattern = match.route.path;
+      final context = Context(scoped, app);
       return await _runChain(
         <Middleware>[
           ..._middlewareOf(match.route.app),
           ...match.route.middleware,
         ],
         0,
-        request,
+        scoped,
         context,
         match.route.handler,
       );

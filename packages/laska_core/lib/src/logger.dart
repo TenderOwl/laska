@@ -29,7 +29,9 @@ class Logger {
     void Function(String line)? sink,
     this.service = 'laska',
     this.version,
-  }) : _sink = sink ?? _writeToStdout;
+    Map<String, Object?> fields = const <String, Object?>{},
+  })  : _sink = sink ?? _writeToStdout,
+        _fields = Map<String, Object?>.of(fields);
 
   /// The minimum severity that is written.
   final LogLevel level;
@@ -40,7 +42,22 @@ class Logger {
   /// The version of the service, written with every record.
   final String? version;
 
+  /// The fields written with every record.
+  final Map<String, Object?> _fields;
+
   final void Function(String line) _sink;
+
+  /// Returns a logger that writes [fields] with every record.
+  ///
+  /// The fields of a record win over the fields of the logger, so a caller
+  /// can always overwrite a correlation field.
+  Logger child(Map<String, Object?> fields) => Logger(
+        level: level,
+        sink: _sink,
+        service: service,
+        version: version,
+        fields: <String, Object?>{..._fields, ...fields},
+      );
 
   /// Writes a debug record.
   void debug(String message, [Map<String, Object?> fields = const {}]) =>
@@ -74,6 +91,7 @@ class Logger {
       'service': service,
       if (version != null) 'version': version,
       'message': message,
+      ..._fields.map((key, value) => MapEntry(key, _redact(key, value))),
       ...fields.map((key, value) => MapEntry(key, _redact(key, value))),
     };
 

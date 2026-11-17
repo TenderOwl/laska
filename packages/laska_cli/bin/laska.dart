@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:args/args.dart';
+import 'package:laska_cli/src/collector.dart';
+import 'package:laska_cli/src/workspace.dart';
 import 'package:laska_core/laska_core.dart';
 import 'package:laska_contracts/laska_contracts.dart';
 
@@ -42,6 +45,8 @@ Future<void> main(List<String> arguments) async {
       await _routeList(command);
     case 'migrate:run':
       await _migrate(command);
+    case 'dev':
+      await _dev(command);
     default:
       stdout.writeln(parser.usage);
       exitCode = 64;
@@ -130,6 +135,32 @@ Future<void> main(List<String> arguments) async {
       'directory',
       help: 'Directory holding the migration files.',
       defaultsTo: 'migrations',
+    );
+
+  parser.addCommand('dev')
+    ..addOption(
+      'manifest',
+      help: 'Workspace manifest. Defaults to laska.yaml.',
+      defaultsTo: 'laska.yaml',
+    )
+    ..addOption(
+      'entrypoint',
+      help: 'Dart file of a single service, when there is no manifest.',
+    )
+    ..addOption(
+      'port',
+      help: 'Port of the service, when there is no manifest.',
+      defaultsTo: '3789',
+    )
+    ..addOption(
+      'collector-port',
+      help: 'Port of the local telemetry collector.',
+      defaultsTo: '4318',
+    )
+    ..addFlag(
+      'no-collector',
+      negatable: false,
+      help: 'Do not start the local telemetry collector.',
     );
 
   return (parser: parser, contract: contract, compile: compile, diff: diff);
@@ -294,6 +325,108 @@ Future<void> _migrate(ArgResults options) async {
   if (result.exitCode != 0) {
     stderr.write(result.stderr);
     exitCode = result.exitCode;
+  }
+}
+
+/// Runs the workspace in development.
+///
+/// Every service of the manifest is started, the logs of the services are
+/// aggregated in one stream and the telemetry of the services is sent to the
+/// local collector, which prints the traces it receives.
+Future<void> _dev(ArgResults options) async {
+  final manifest = File(options.option('manifest')!);
+  final services = <WorkspaceService>[];
+
+  if (manifest.existsSync()) {
+    try {
+      services.addAll(readWorkspace(manifest).services);
+    } on WorkspaceException catch (error) {
+      stderr.writeln(error.message);
+      exitCode = 65;
+      return;
+    }
+  } else {
+    final entrypoint = _resolveEntrypoint(options.option('entrypoint'));
+    if (entrypoint == null) {
+      return;
+    }
+    services.add(
+      WorkspaceService(
+        name: 'app',
+        entrypoint: entrypoint,
+        port: int.tryParse(options.option('port') ?? '') ?? 3789,
+      ),
+    );
+  }
+
+  // The entrypoints are checked before anything is started, so a wrong
+  // manifest costs nothing.
+  for (final service in services) {
+    if (!File(service.entrypoint).existsSync()) {
+      stderr.writeln(
+        'The entrypoint "${service.entrypoint}" of the service '
+        '"${service.name}" does not exist.',
+      );
+      exitCode = 66;
+      return;
+    }
+  }
+
+  LocalCollector? collector;
+  if (!options.flag('no-collector')) {
+    collector = LocalCollector();
+    try {
+      await collector.start(
+        port: int.tryParse(options.option('collector-port') ?? '') ?? 4318,
+      );
+    } on SocketException catch (error) {
+      stderr.writeln('The collector could not start: ${error.message}');
+      exitCode = 69;
+      return;
+    }
+    stdout.writeln('=> collector on ${collector.endpoint}');
+  }
+
+  final supervisors = <Supervisor>[];
+  try {
+    for (final service in services) {
+      final entrypoint = File(service.entrypoint);
+
+      stdout.writeln(
+        '=> ${service.name} on http://127.0.0.1:${service.port}',
+      );
+
+      final supervisor = Supervisor(
+        SupervisorOptions(
+          entrypoint: entrypoint.absolute.path,
+          executable: Platform.resolvedExecutable,
+          address: '127.0.0.1',
+          port: service.port,
+          label: service.name,
+          environment: <String, String>{
+            ...service.environment,
+            'OTEL_SERVICE_NAME': service.name,
+            if (collector != null) ...<String, String>{
+              'OTEL_EXPORTER_OTLP_ENDPOINT': collector.endpoint.toString(),
+              'OTEL_EXPORTER_OTLP_PROTOCOL': 'http/json',
+            },
+          },
+          logger: Logger(service: 'laska'),
+        ),
+      );
+      supervisors.add(supervisor);
+      unawaited(supervisor.run());
+    }
+
+    stdout.writeln(
+      '=> ${services.length} service(s) started. Press Ctrl+C to stop.',
+    );
+
+    await Completer<void>().future;
+  } finally {
+    // The collector holds the event loop of the process, so it is closed when
+    // the command returns.
+    await collector?.stop();
   }
 }
 

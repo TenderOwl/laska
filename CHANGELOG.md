@@ -7,6 +7,25 @@
   contract-first operations for polyglot teams.
 - Rewrote `PLAN.md` around the new positioning: 5 packages instead of 11, SQL-first data access
   instead of a framework ORM, and contracts + observability moved ahead of the ORM work.
+- **Implemented the observability layer (Phase 3):**
+  - A `Tracer` abstraction in `laska_core`, with the OpenTelemetry SDK
+    (`dartastic_opentelemetry`, Apache-2.0) as the default implementation behind it, so the SDK
+    can be replaced without touching the runtime. The standard `OTEL_*` environment variables
+    configure it: `OTEL_SERVICE_NAME`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_TRACES_SAMPLER_ARG`,
+    `OTEL_SDK_DISABLED`.
+  - Auto-instrumentation as built-in middleware: a server span per request, a client span per
+    outgoing call and a span per SQL statement (`TracingDatabase`). The generated client writes the
+    `traceparent` header, so a request through two services is one trace.
+  - Structured logs correlated by `request_id`, `trace_id` and `span_id` — `ctx.logger` carries
+    the context of the request.
+  - Prometheus `/metrics` in the text exposition format, `/healthz` and `/readyz`.
+  - `Observability.install(app)` wires the whole stack with one call.
+  - `laska dev` — the workspace runner: it starts every service of `laska.yaml`, aggregates
+    their logs in one stream and points them at a local collector that prints the traces.
+  - `laska_test` gained a fake tracer, so a test can assert what a service traced.
+  - The supervisor no longer restarts a worker forever: after `maxRestarts` tries it gives up and
+    says so. On Windows the service runs with a single worker, because the platform has no
+    SO_REUSEPORT and two processes cannot listen on the same port.
 - **Implemented the core runtime (Phase 1):**
   - Router v2 — parameter constraints (`:id<int>`, `:id<uuid>`, `:id<slug>`, custom regular
     expressions), optional segments (`:id?`), wildcards, named routes, `urlFor` and a

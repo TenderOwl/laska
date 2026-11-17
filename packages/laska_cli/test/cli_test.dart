@@ -162,6 +162,39 @@ message User {
     });
   });
 
+  group('laska dev', () {
+    test('fails when there is neither a manifest nor an entrypoint', () async {
+      final result = await _run(<String>[
+        'dev',
+        '--manifest',
+        '${workspace.path}/missing.yaml',
+        '--no-collector',
+      ]);
+
+      expect(result.exitCode, 66);
+      expect(result.stderr.toString(), contains('No entrypoint found'));
+    });
+
+    test('fails when the entrypoint of a service does not exist', () async {
+      File('${workspace.path}/laska.yaml').writeAsStringSync('''
+services:
+  - name: users
+    entrypoint: services/users/bin/server.dart
+    port: 8080
+''');
+
+      final result = await _run(<String>[
+        'dev',
+        '--manifest',
+        '${workspace.path}/laska.yaml',
+        '--no-collector',
+      ]);
+
+      expect(result.exitCode, 66);
+      expect(result.stderr.toString(), contains('does not exist'));
+    });
+  });
+
   group('laska migrate:run', () {
     test('applies the migrations of the service', () async {
       final migrations = Directory('${workspace.path}/migrations')

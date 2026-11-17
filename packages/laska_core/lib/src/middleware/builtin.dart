@@ -26,7 +26,8 @@ Middleware requestIdMiddleware({String header = 'x-request-id'}) {
 /// Logs one record per request.
 ///
 /// The record holds the method, the path, the status, the duration and the
-/// request id, so a request can be followed from the log into a trace.
+/// request id, so a request can be followed from the log into a trace. When
+/// the request is traced, the record holds the trace and the span as well.
 Middleware loggingMiddleware(Logger logger) {
   return (request, next) async {
     final stopwatch = Stopwatch()..start();
@@ -40,6 +41,10 @@ Middleware loggingMiddleware(Logger logger) {
           'status': response.status,
           'duration_ms': stopwatch.elapsedMicroseconds / 1000,
           if (request.id != null) 'request_id': request.id,
+          if (request.traceContext != null)
+            'trace_id': request.traceContext!.traceId,
+          if (request.traceContext != null)
+            'span_id': request.traceContext!.spanId,
         },
       );
       return response;
@@ -51,6 +56,10 @@ Middleware loggingMiddleware(Logger logger) {
           'path': request.path,
           'duration_ms': stopwatch.elapsedMicroseconds / 1000,
           if (request.id != null) 'request_id': request.id,
+          if (request.traceContext != null)
+            'trace_id': request.traceContext!.traceId,
+          if (request.traceContext != null)
+            'span_id': request.traceContext!.spanId,
           'error': error.toString(),
         },
       );
