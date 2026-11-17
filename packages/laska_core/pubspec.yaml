@@ -1,0 +1,12 @@
+name: laska_core
+description: Core runtime of the Laska service framework — routing, middleware, request/response.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+
+resolution: workspace
+
+dev_dependencies:
+  test: ^1.33.0

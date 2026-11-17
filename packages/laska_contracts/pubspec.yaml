@@ -1,0 +1,15 @@
+name: laska_contracts
+description: Contract tooling for Laska — proto parsing, code generation, OpenAPI export and breaking-change detection.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+
+resolution: workspace
+
+dependencies:
+  dart_style: ^3.1.13
+
+dev_dependencies:
+  test: ^1.33.0

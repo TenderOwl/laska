@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package users.v1;
+
+import "google/api/annotations.proto";
+
+// UsersService manages the accounts of the application.
+service UsersService {
+  // GetUser returns a single user by its identifier.
+  rpc GetUser(GetUserRequest) returns (User) {
+    option (google.api.http) = { get: "/v1/users/{id}" };
+  }
+
+  // ListUsers returns a page of users.
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {
+    option (google.api.http) = { get: "/v1/users" };
+  }
+
+  // CreateUser creates a new user.
+  rpc CreateUser(CreateUserRequest) returns (User) {
+    option (google.api.http) = { post: "/v1/users" body: "*" };
+  }
+}
+
+// A user of the application.
+message User {
+  // Stable identifier of the user.
+  string id = 1;
+
+  // Email address of the user.
+  string email = 2;
+
+  // Human readable name.
+  string display_name = 3;
+
+  // Role of the user.
+  UserRole role = 4;
+
+  // Free form tags.
+  repeated string tags = 5;
+}
+
+// The role a user has.
+enum UserRole {
+  USER_ROLE_UNSPECIFIED = 0;
+  USER_ROLE_ADMIN = 1;
+  USER_ROLE_MEMBER = 2;
+}
+
+// Request of the GetUser method.
+message GetUserRequest {
+  string id = 1;
+}
+
+// Request of the ListUsers method.
+message ListUsersRequest {
+  int32 limit = 1;
+  string cursor = 2;
+}
+
+// Response of the ListUsers method.
+message ListUsersResponse {
+  repeated User users = 1;
+  string next_cursor = 2;
+}
+
+// Request of the CreateUser method.
+message CreateUserRequest {
+  string email = 1;
+  string display_name = 2;
+  UserRole role = 3;
+}

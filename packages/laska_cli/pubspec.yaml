@@ -1,0 +1,16 @@
+name: laska_cli
+description: The laska command line interface — contract compilation and compatibility checks.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+
+resolution: workspace
+
+dependencies:
+  args: ^2.7.0
+  laska_contracts: ^0.1.0
+
+dev_dependencies:
+  test: ^1.33.0
