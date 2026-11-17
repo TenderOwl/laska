@@ -108,7 +108,7 @@ SQL migrations · auth (JWT / session / API key) · rate limiting · CLI · test
 **Test coverage then:** the router only. Nothing exercised the server, the middleware chain,
 error paths, or the isolate model.
 
-**Test coverage now:** 205 tests across five packages — the router, the dispatcher, the middleware
+**Test coverage now:** 247 tests across five packages — the router, the dispatcher, the middleware
 chain, the config and the logger, the server and its graceful drain, the supervisor with real
 worker processes, the database layer and the migration runner, the tracing and the metrics, the
 OpenTelemetry adapter, the health probes, the test harness and the CLI.
@@ -535,6 +535,12 @@ Built on `package:args`. `laska serve` is the supervisor described in §4.1. `la
 single most valuable command for the target audience: it starts every service in the workspace,
 wires them to a local Postgres/Redis (via a generated compose file), aggregates their logs, and
 shows live traces — the "one command instead of five tools" promise in practice.
+
+Every command has a help: `laska --help` lists the commands, the global options and the
+environment variables of the telemetry, `laska help <command>` describes one command with its
+options and its defaults, and `--help` works on every command. The help is rendered from the
+parser itself, so it cannot drift away from the commands that are actually there. An unknown
+command is reported and exits with the code `64`.
 
 ### 5.4 `laska_test`
 

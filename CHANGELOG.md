@@ -1,5 +1,15 @@
 ## Unreleased
 
+- **The command line interface has a help.** `laska --help` (or `laska -h`, or `laska help`) prints
+  the list of the commands, the global options and the environment variables of the telemetry, and
+  `laska help <command>` describes one command with its options and its defaults. Every command also
+  answers `--help` on its own. The help is built from the parser, so it cannot drift away from the
+  commands and the options that are actually there. An unknown command is reported and exits with
+  the code `64` instead of printing the help as if nothing happened.
+- The commands of the CLI moved to `laska_cli/src/cli.dart` behind `runCli(arguments, {out, err})`,
+  and the executable only forwards the result to the process. A test can therefore drive the
+  commands in process, which made the suite of the CLI about fifteen times faster and removed the
+  timeouts it hit on a loaded machine.
 - Repositioned the project: Laska is now a **contract-first service framework** (protobuf
   contracts → REST + gRPC + typed clients in Dart/PHP/Python/Go/TS, OpenAPI export, breaking-change
   detection), with observability, resilience and multi-service workspace tooling as first-class

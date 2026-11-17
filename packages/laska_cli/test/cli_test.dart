@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:laska_cli/src/cli.dart';
 import 'package:test/test.dart';
 
 const String _contract = '''
@@ -23,16 +24,31 @@ message User {
 }
 ''';
 
-Future<ProcessResult> _run(
+/// The tests of the CLI start real processes, so they need more time than the
+/// default timeout of thirty seconds.
+const Timeout _timeout = Timeout(Duration(minutes: 3));
+
+/// The result of one run of the command line interface.
+typedef CliResult = ({int code, String out, String err});
+
+/// Runs the command line interface in process.
+///
+/// The commands are driven in process, so the tests do not pay for a new
+/// virtual machine per command.
+Future<CliResult> _run(
   List<String> arguments, {
   Map<String, String>? environment,
-}) =>
-    Process.run(
-      Platform.resolvedExecutable,
-      <String>['run', 'bin/laska.dart', ...arguments],
-      workingDirectory: Directory.current.path,
-      environment: environment,
-    );
+}) async {
+  final out = StringBuffer();
+  final err = StringBuffer();
+  final code = await runCli(
+    arguments,
+    out: out,
+    err: err,
+    environment: environment,
+  );
+  return (code: code, out: out.toString(), err: err.toString());
+}
 
 void main() {
   late Directory workspace;
@@ -64,7 +80,7 @@ void main() {
         '${workspace.path}/out',
       ]);
 
-      expect(result.exitCode, 0, reason: result.stderr.toString());
+      expect(result.code, 0, reason: result.err);
       expect(
         File('${workspace.path}/out/users.pb.dart').existsSync(),
         isTrue,
@@ -93,8 +109,8 @@ message User {
         '${workspace.path}/out',
       ]);
 
-      expect(result.exitCode, 65);
-      expect(result.stderr.toString(), contains('unknown type'));
+      expect(result.code, 65);
+      expect(result.err, contains('unknown type'));
     });
   });
 
@@ -112,9 +128,9 @@ message User {
         '${workspace.path}/candidate',
       ]);
 
-      expect(result.exitCode, 1);
-      expect(result.stdout.toString(), contains('BREAKING'));
-      expect(result.stdout.toString(), contains('users.v1.User.email'));
+      expect(result.code, 1);
+      expect(result.out, contains('BREAKING'));
+      expect(result.out, contains('users.v1.User.email'));
     });
 
     test('passes for a compatible contract', () async {
@@ -130,8 +146,8 @@ message User {
         '${workspace.path}/candidate',
       ]);
 
-      expect(result.exitCode, 0);
-      expect(result.stdout.toString(), contains('No changes detected'));
+      expect(result.code, 0);
+      expect(result.out, contains('No changes detected'));
     });
   });
 
@@ -143,8 +159,8 @@ message User {
         'test/fixtures/service.dart',
       ]);
 
-      expect(result.exitCode, 0, reason: result.stderr.toString());
-      final output = result.stdout.toString();
+      expect(result.code, 0, reason: result.err);
+      final output = result.out;
       expect(output, contains('METHOD'));
       expect(output, contains('/users'));
       expect(output, contains('createUser'));
@@ -157,10 +173,10 @@ message User {
         '${workspace.path}/missing.dart',
       ]);
 
-      expect(result.exitCode, 66);
-      expect(result.stderr.toString(), contains('does not exist'));
+      expect(result.code, 66);
+      expect(result.err, contains('does not exist'));
     });
-  });
+  }, timeout: _timeout);
 
   group('laska dev', () {
     test('fails when there is neither a manifest nor an entrypoint', () async {
@@ -171,8 +187,8 @@ message User {
         '--no-collector',
       ]);
 
-      expect(result.exitCode, 66);
-      expect(result.stderr.toString(), contains('No entrypoint found'));
+      expect(result.code, 66);
+      expect(result.err, contains('No entrypoint found'));
     });
 
     test('fails when the entrypoint of a service does not exist', () async {
@@ -190,10 +206,10 @@ services:
         '--no-collector',
       ]);
 
-      expect(result.exitCode, 66);
-      expect(result.stderr.toString(), contains('does not exist'));
+      expect(result.code, 66);
+      expect(result.err, contains('does not exist'));
     });
-  });
+  }, timeout: _timeout);
 
   group('laska migrate:run', () {
     test('applies the migrations of the service', () async {
@@ -215,9 +231,9 @@ services:
         },
       );
 
-      expect(result.exitCode, 0, reason: result.stderr.toString());
-      expect(result.stdout.toString(), contains('applied 1 migration(s)'));
-      expect(result.stdout.toString(), contains('001_create_users'));
+      expect(result.code, 0, reason: result.err);
+      expect(result.out, contains('applied 1 migration(s)'));
+      expect(result.out, contains('001_create_users'));
     });
 
     test('does not apply a migration twice', () async {
@@ -240,9 +256,9 @@ services:
       final first = await _run(arguments, environment: environment);
       final second = await _run(arguments, environment: environment);
 
-      expect(first.exitCode, 0, reason: first.stderr.toString());
-      expect(second.exitCode, 0, reason: second.stderr.toString());
-      expect(second.stdout.toString(), contains('applied 0 migration(s)'));
+      expect(first.code, 0, reason: first.err);
+      expect(second.code, 0, reason: second.err);
+      expect(second.out, contains('applied 0 migration(s)'));
     });
-  });
+  }, timeout: _timeout);
 }

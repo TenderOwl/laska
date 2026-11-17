@@ -216,6 +216,25 @@ laska migrate:run        [--entrypoint <file>] [--directory <dir>]
 between them, restarts the ones that crash and stops them all on a signal. `laska route:list`
 prints the route table of the service, and `laska migrate:run` applies the pending SQL migrations.
 
+Every command has a help of its own. `laska --help` lists the commands, the global options and the
+environment variables of the telemetry, and `laska help <command>` describes one command with its
+options and its defaults:
+
+```console
+$ dart run laska_cli:laska help contract compile
+laska contract compile — Generate the Dart code and the OpenAPI document of a contract.
+
+Usage:
+  laska contract compile [options]
+
+Options:
+  --proto <value>    Directory containing the .proto files.
+                     (default: proto)
+  --out <value>      Directory the generated code is written to.
+                     (default: lib/generated)
+  ...
+```
+
 > **Platform note.** On POSIX systems the workers share the port with SO_REUSEPORT and the kernel
 > balances the connections between them. Windows has no such option: two processes cannot listen on
 > the same port, so the supervisor runs a **single worker** there and says so in the log. The
