@@ -23,10 +23,15 @@ message User {
 }
 ''';
 
-Future<ProcessResult> _run(List<String> arguments) => Process.run(
+Future<ProcessResult> _run(
+  List<String> arguments, {
+  Map<String, String>? environment,
+}) =>
+    Process.run(
       Platform.resolvedExecutable,
       <String>['run', 'bin/laska.dart', ...arguments],
       workingDirectory: Directory.current.path,
+      environment: environment,
     );
 
 void main() {
@@ -127,6 +132,84 @@ message User {
 
       expect(result.exitCode, 0);
       expect(result.stdout.toString(), contains('No changes detected'));
+    });
+  });
+
+  group('laska route:list', () {
+    test('prints the route table of the service', () async {
+      final result = await _run(<String>[
+        'route:list',
+        '--entrypoint',
+        'test/fixtures/service.dart',
+      ]);
+
+      expect(result.exitCode, 0, reason: result.stderr.toString());
+      final output = result.stdout.toString();
+      expect(output, contains('METHOD'));
+      expect(output, contains('/users'));
+      expect(output, contains('createUser'));
+    });
+
+    test('fails when the entrypoint does not exist', () async {
+      final result = await _run(<String>[
+        'route:list',
+        '--entrypoint',
+        '${workspace.path}/missing.dart',
+      ]);
+
+      expect(result.exitCode, 66);
+      expect(result.stderr.toString(), contains('does not exist'));
+    });
+  });
+
+  group('laska migrate:run', () {
+    test('applies the migrations of the service', () async {
+      final migrations = Directory('${workspace.path}/migrations')
+        ..createSync(recursive: true);
+      File('${migrations.path}/001_create_users.sql')
+          .writeAsStringSync('CREATE TABLE users (id INTEGER PRIMARY KEY);');
+
+      final result = await _run(
+        <String>[
+          'migrate:run',
+          '--entrypoint',
+          'test/fixtures/service_with_db.dart',
+          '--directory',
+          migrations.path,
+        ],
+        environment: <String, String>{
+          'LASKA_TEST_DATABASE': '${workspace.path}/service.sqlite',
+        },
+      );
+
+      expect(result.exitCode, 0, reason: result.stderr.toString());
+      expect(result.stdout.toString(), contains('applied 1 migration(s)'));
+      expect(result.stdout.toString(), contains('001_create_users'));
+    });
+
+    test('does not apply a migration twice', () async {
+      final migrations = Directory('${workspace.path}/migrations')
+        ..createSync(recursive: true);
+      File('${migrations.path}/001_create_users.sql')
+          .writeAsStringSync('CREATE TABLE users (id INTEGER PRIMARY KEY);');
+
+      final arguments = <String>[
+        'migrate:run',
+        '--entrypoint',
+        'test/fixtures/service_with_db.dart',
+        '--directory',
+        migrations.path,
+      ];
+      final environment = <String, String>{
+        'LASKA_TEST_DATABASE': '${workspace.path}/service.sqlite',
+      };
+
+      final first = await _run(arguments, environment: environment);
+      final second = await _run(arguments, environment: environment);
+
+      expect(first.exitCode, 0, reason: first.stderr.toString());
+      expect(second.exitCode, 0, reason: second.stderr.toString());
+      expect(second.stdout.toString(), contains('applied 0 migration(s)'));
     });
   });
 }

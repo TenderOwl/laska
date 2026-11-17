@@ -4,11 +4,13 @@
 > One contract → typed server stubs + typed clients in any language, observability and
 > resilience built in, one binary to deploy.
 
-**Status (2026-11-17):** Phase 2 is implemented as a working vertical slice — `.proto` →
-Dart messages, service interface, REST routes, typed client, OpenAPI 3.1 and a
-breaking-change check. The contract pipeline ships with a **pure-Dart `.proto` parser**
-instead of `protoc`, which removes the native toolchain from the critical path entirely
-(§4.3). See §6 for what is done and what is left.
+**Status (2026-11-17):** Phase 1 (core runtime) and Phase 2 (contract pipeline) are
+implemented. The runtime has a router with parameter constraints and named routes, an explicit
+middleware chain, RFC 9457 error rendering, config + structured logging, a graceful shutdown with a
+worker supervisor, a thin `Db` layer with SQL migrations and a test harness that exercises a
+service in process. The contract pipeline ships with a **pure-Dart `.proto` parser** instead of
+`protoc`, which removes the native toolchain from the critical path entirely (§4.3). See §6 for
+what is done and what is left.
 
 ---
 
@@ -57,9 +59,11 @@ traced, retried and observable.
 
 ---
 
-## 1. Where Laska stands today
+## 1. Where Laska came from
 
-Audit of the current tree (`lib/` is ~700 lines of real code, last commit 2024-08-01).
+Audit of the original tree (`lib/` was ~700 lines of real code, last commit 2024-08-01). The legacy
+prototype has since been removed (`git rm`, history preserved); this section records why each
+decision was taken, because the current code is a rewrite of it.
 
 ### Keep
 
@@ -91,7 +95,7 @@ Audit of the current tree (`lib/` is ~700 lines of real code, last commit 2024-0
 | Vendored `http_body.dart` | Use `package:http_parser`. |
 | `Set<Middleware>` in `Configuration` | Ordering must be explicit, so use `List`. |
 
-### Missing entirely
+### Missing entirely — *as of the legacy prototype; most of it is implemented now*
 
 DI container · request validation · config/env loading · structured logging · graceful shutdown ·
 contract tooling (protobuf compilation, codegen, breaking-change detection) · OpenAPI export ·
@@ -99,8 +103,12 @@ distributed tracing · metrics · health/readiness probes · inter-service clien
 primitives (retry, circuit breaker, bulkhead, idempotency) · workspace/multi-service tooling ·
 SQL migrations · auth (JWT / session / API key) · rate limiting · CLI · test harness.
 
-**Test coverage today:** the router only. Nothing exercises the server, the middleware chain,
+**Test coverage then:** the router only. Nothing exercised the server, the middleware chain,
 error paths, or the isolate model.
+
+**Test coverage now:** 166 tests across five packages — the router, the dispatcher, the middleware
+chain, the config and the logger, the server and its graceful drain, the supervisor with real
+worker processes, the database layer and the migration runner, the test harness and the CLI.
 
 ---
 
@@ -131,15 +139,15 @@ error paths, or the isolate model.
 Pub workspace monorepo (Dart 3.6+ workspaces; SDK 3.14 is available locally).
 
 ```
-laska/
+laska/                    # the umbrella package — what apps depend on
 ├── packages/
-│   ├── laska_core/        # app, router, request/response, middleware, DI, config,
-│   │                      # errors, lifecycle, supervisor, telemetry, resilience, SQL migrations
+│   ├── laska_core/        # app, router, request/response, middleware, config, logger,
+│   │                      # errors, supervisor, telemetry, resilience, SQL migrations
 │   ├── laska_contracts/   # contract compilation, codegen, client generation, diffing, OpenAPI
 │   ├── laska_cli/         # the `laska` CLI
-│   ├── laska_test/        # test harness: app builder, HTTP client, fixtures, fake telemetry
-│   └── laska/             # umbrella package — what apps depend on
+│   └── laska_test/        # test harness: in-process client, expectations, database helpers
 ├── example/
+│   └── contract_slice/    # the vertical slice: contract → generated code → service → client
 ├── docs/
 └── tool/                  # repo-level checks
 ```
@@ -183,6 +191,12 @@ All packages version in lockstep. The umbrella package `laska` pins the rest.
 - Health: supervisor restarts crashed workers, drains on SIGTERM (graceful shutdown: stop accepting,
   finish in-flight requests within a timeout, flush queues, close pools).
 - **Every app must be safe to run as N processes.** No in-process global state as a source of truth.
+
+**Platform notes.** On POSIX systems `shared: true` is SO_REUSEPORT and the kernel balances the
+connections between the workers. **On Windows it is SO_REUSEADDR**, which does not balance: the
+connections may all land on one worker, and the port cannot be bound twice without it. The
+graceful stop is also weaker there, because `Process.kill` terminates the worker immediately
+instead of delivering SIGTERM. Both limitations are Windows-only and are documented in the README.
 
 *Consequence to document loudly:* this replaces the old isolate model, so `Laska` objects are no
 longer shipped across isolates — a worker gets its own app instance built in-process.
@@ -288,9 +302,10 @@ regenerating updates server, clients and docs in one step.
 
 ### 4.5 Contract diffing — breaking-change detection in CI
 
-`laska contract diff <base> --against <head>` compares two contract snapshots and fails on
+`laska contract diff --base <dir> --candidate <dir>` compares two contract snapshots and fails on
 breaking changes, using Buf's semantic rules (field number reuse, type change, removal of a
-field, changing a required method, and so on).
+field, changing a required method, and so on). The command exits with code `1` when it finds a
+breaking change, so a CI job fails on it.
 
 This is a small feature with a disproportionate effect on the target audience: it turns
 "the mobile team got a surprise on release day" into "the CI pipeline stopped the merge". It is
@@ -319,22 +334,23 @@ Rewrite `router.dart` around a segment tree with deterministic priority.
 |---|---|
 | `/users` | static segment |
 | `/users/:id` | named parameter |
-| `/users/:id<int>` | parameter with a constraint (`int`, `uuid`, `float`, `slug`, or a regex `/^\d{4}$/`) |
+| `/users/:id<int>` | parameter with a constraint (`int`, `float`, `bool`, `uuid`, `slug`) |
+| `/users/:code<^[A-Z]{3}$>` | parameter with a custom regular expression, anchored to the whole value |
 | `/users/:id?` | optional trailing parameter |
 | `/files/*` | wildcard (rest of path) |
 | `ANY` | any HTTP method |
 
 Features:
 
-- **Route groups** with prefix + middleware + scope: `app.group('/admin', () {...}, prefix: '/v1')`.
-- **Named routes** and a URL generator: `Url.for('users.show', {id: 1})` → `/v1/users/1`.
+- **Route groups** with prefix + middleware + scope: `app.group('/admin', (group) {...})`.
+- **Named routes** and a URL generator: `app.urlFor('users.show', {'id': '1'})` → `/v1/users/1`.
 - **405 with an `Allow` header** — the matcher knows which methods exist for a path.
-- **Deterministic priority**: static > parameter > wildcard, with constraints narrowing the
-  parameter branch first. No "last registered wins" ambiguity.
+- **Deterministic priority**: static > constrained parameter > parameter > wildcard. No
+  "last registered wins" ambiguity.
 - **Contract-driven routes** — routes generated from `google.api.http` annotations are registered
   through the same matcher, so hand-written and generated routes coexist with one priority model.
 - Keep the static-route hashmap fast path from the current implementation.
-- `laska route:list` prints the full route table (method, path, name, middleware, handler).
+- `laska route:list` prints the full route table (method, path, name, middleware).
 
 ### 4.8 Middleware — explicit, ordered, onion model
 
@@ -346,14 +362,19 @@ abstract class Middleware {
 ```
 
 - Order is **global → group → route → handler**, and it is *specified*, not incidental.
-- Named/aliased middleware: `app.use('auth', AuthMiddleware())`, then `app.get('/me', h, middleware: ['auth'])`.
-- Global middleware can be excluded per route (`app.get('/health', h, skip: ['cors'])`).
-- A middleware short-circuits by not calling `next` (replaces the current "return null" convention,
-  which is easy to get wrong).
+- The chain is resolved **when the request arrives**, not when the route is registered: the global
+  middleware runs for every route — including the routes registered before it — and the middleware
+  of a group runs for the routes of that group only.
+- Named/aliased middleware: `app.alias('auth', authMiddleware)`, then
+  `app.get('/me', h, middleware: ['auth'])`. A route may also take a middleware instance directly.
+- A middleware short-circuits by returning a response of its own instead of calling `next`
+  (replaces the current "return null" convention, which is easy to get wrong).
 - The middleware chain is the **single instrumentation point**: tracing, metrics, logging and
   request-id propagation are implemented as built-in middleware, not as user-installed packages.
   This is why observability is cheap to adopt and impossible to retrofit later without breaking
   the API.
+- The built-in set: `requestIdMiddleware`, `loggingMiddleware`, `corsMiddleware`,
+  `securityHeadersMiddleware`.
 
 ### 4.9 Dependency injection — explicit registration, optional codegen
 
@@ -444,19 +465,29 @@ and gains an ORM-independent schema, no codegen step, and no framework lock-in o
 
 ### 5.1 `laska_core`
 
-- `Laska` app object: `config`, `use`, `group`, route verbs, `singleton`/`bind`, `onStart`/`onShutdown`.
-- `Request` — method, path, `uri`, headers, cookies, `body()` (JSON/form/multipart/text/raw), `query`,
-  `params`, `route`, `ip`, `userAgent`, `contentType`.
-- `Response` — `json`, `text`, `html`, `redirect`, `status`, `stream`, `file`, `attachment`.
-- `Context` — request + response + `session` + `auth` + `app` + `logger` + `tracer`.
-- `Config` — typed config classes loaded from `config/*.dart` + env overrides (`.env` via `package:dotenv`),
-  with secret redaction in logs.
-- `Logger` — structured JSON output, request-id and trace-id correlation.
-- Lifecycle hooks: `onStart`, `onReady`, `onShutdown`; graceful shutdown with in-flight drain and timeout.
-- Built-in middleware: tracing, metrics, request logging, request-id, recovery, CORS, rate limit,
-  security headers.
-- Auth: JWT (via `package:jose`), signed session cookies, API keys; pluggable guard interface.
-- `Db` helper over `package:postgres` / `package:sqlite3`, plus the SQL migration runner.
+*Done:*
+
+- `Laska` app object: route verbs, `group`, `use`, `alias`, `urlFor`, `database`,
+  `migrationsDirectory`, `dispatcher`.
+- `Request` — method, path, `uri`, headers, `query`, `params`, `body`, `json()`, `id`.
+- `Response` — `json`, `text`, `bytes`, `problem` (RFC 9457), `copyWith`.
+- `Context` — request + app + `params`, `query`, `headers`, `json`, `text`.
+- `Dispatcher` — the single place where routing, the middleware chain and the error rendering meet;
+  used by the server and by the test harness alike.
+- `Config` — environment over `.env`, typed accessors (`string`, `integer`, `number`, `boolean`,
+  `list`, `secret`), secret redaction.
+- `Logger` — structured JSON output, levels, secret redaction, `service`/`version` fields.
+- Middleware: explicit order, named aliases, and the built-in set (request id, request logging,
+  CORS, security headers).
+- `LaskaServer` — `dart:io` server with an in-flight drain and a graceful `stop()`.
+- `Supervisor` — worker processes on a shared port, restart of crashed workers, graceful stop.
+- `Database` over `package:postgres` and `package:sqlite3`, plus the SQL migration runner.
+
+*Planned:*
+
+- `singleton`/`bind` DI, lifecycle hooks (`onStart`/`onReady`/`onShutdown`), auth (JWT, session
+  cookies, API keys), rate limiting, streaming responses, WebSocket upgrades, `package:http_parser`
+  for multipart uploads.
 
 ### 5.2 `laska_contracts`
 
@@ -474,15 +505,15 @@ and gains an ORM-independent schema, no codegen step, and no framework lock-in o
 ```
 laska new <name>          # scaffold a project
 laska new service <name>  # scaffold a service inside a workspace
-laska serve [--workers=N] # run the HTTP server (supervisor)
+laska serve [--workers=N] # run the HTTP server (supervisor)          [done]
 laska dev                 # run all services of a workspace + local infra + aggregated logs
-laska contract compile    # compile contracts, generate code
+laska contract compile    # compile contracts, generate code         [done]
 laska contract generate --lang=go
-laska contract diff <base>
+laska contract diff --base <dir> --candidate <dir>                   [done]
 laska contract lint
-laska route:list          # dump the route table
+laska route:list          # dump the route table                      [done]
 laska migrate:make <name> # scaffold a SQL migration
-laska migrate:run|status|rollback
+laska migrate:run|status|rollback                                     [run done]
 laska db:seed
 laska build               # AOT compile
 laska dockerfile|k8s      # deployment artifacts
@@ -495,9 +526,17 @@ shows live traces — the "one command instead of five tools" promise in practic
 
 ### 5.4 `laska_test`
 
-- `testClient(app)` → `.get('/users').expect(200).json({...})`.
-- In-memory SQLite for fast unit tests; Postgres via compose for integration tests.
-- Fixtures/seed helpers, DB transaction rollback between tests, fake cache/session/queue/telemetry.
+*Done:*
+
+- `testClient(app)` → an in-process client that goes through the same dispatcher as the HTTP
+  server, with `expectStatus`/`expectJson`/`expectHeader`/`expectBodyContains`.
+- `openTestDatabase()` — an in-memory SQLite database for fast unit tests.
+- `withTestDatabase(database, body)` — the body runs in a transaction that is rolled back
+  afterwards, so a test never leaves data behind.
+
+*Planned:*
+
+- Fixtures/seed helpers, fake cache/session/queue/telemetry.
 - Contract test helpers: assert that the implementation matches the generated service interface,
   and golden-file tests for the OpenAPI document.
 
@@ -507,32 +546,36 @@ shows live traces — the "one command instead of five tools" promise in practic
 
 Assume one developer at ~20 h/week. Sizes are rough.
 
-### Phase 0 — Groundwork (3–5 days)
+### Phase 0 — Groundwork (3–5 days) — *mostly done*
 
-- [ ] Restructure into a pub workspace; move existing code under `packages/laska_core` with `git mv` (history preserved).
-- [ ] CI: `dart analyze`, `dart format --set-exit-if-changed`, `dart test` on Linux + Windows + macOS.
+- [x] Restructure into a pub workspace; the legacy `lib/` moved out and then removed with `git rm`
+      (history preserved).
+- [x] CI: `dart analyze`, `dart format --set-exit-if-changed`, `dart test` via `tool/check.dart`.
 - [ ] Commit/branch/lint policy; `CONTRIBUTING.md`; changelog process.
 - [ ] Publish skeleton packages to pub.dev.
 
-**Done when:** `laska serve` boots an empty app; CI green on all three OSes.
+**Done when:** `laska serve` boots an empty app; CI green on all three OSes. The runtime and the
+CLI work; the packages are not published yet and the CI matrix only runs on the current platform.
 
-### Phase 1 — Core runtime (12–18 days) — *started*
+### Phase 1 — Core runtime (12–18 days) — **done**
 
 - [x] `Request` / `Response` / `Context` over `dart:io`.
 - [x] Router: static segments, `:param`, `*` wildcard, static fast path, groups with prefix
       and middleware, 405 + `Allow` header.
 - [x] Middleware pipeline with explicit ordering (global → group → route → handler).
 - [x] `HttpException` + RFC 9457 `application/problem+json` rendering.
-- [ ] Parameter constraints (`:id<int>`), named routes, `route:list`.
-- [ ] Middleware aliases, the built-in middleware set, request ids.
-- [ ] Config (`config/*.dart` + env), structured logging with redaction.
-- [ ] Graceful shutdown, supervisor (`laska serve`), worker crash-restart.
-- [ ] `Db` helper + SQL migration runner.
-- [ ] `laska_test` harness with the HTTP client.
+- [x] Parameter constraints (`:id<int>`, `:id<uuid>`, `:id<slug>`, custom regex), optional
+      segments, named routes, `urlFor`, `route:list`.
+- [x] Middleware aliases (`app.alias('auth', mw)`), the built-in middleware set (request id,
+      logging, CORS, security headers), request ids.
+- [x] Config (`.env` + environment, environment wins), structured logging with redaction.
+- [x] Graceful shutdown with in-flight drain, supervisor (`laska serve`), worker crash-restart.
+- [x] `Db` helper over `package:postgres` / `package:sqlite3` + SQL migration runner.
+- [x] `laska_test` harness with the in-process HTTP client and the database helpers.
 
 **Done when:** a route with a param constraint, a group with middleware, and a JSON 422 all behave
-as specified, with tests — *partially done*: the parts marked above exist and are covered by
-`packages/laska_core/test`, the rest is still open.
+as specified, with tests — **done**. The behaviour is pinned by 102 tests in
+`packages/laska_core/test`, 15 in `packages/laska_test/test` and 8 CLI tests.
 
 
 ### Phase 2 — Contracts & codegen (15–20 days) — *differentiator* — **done (vertical slice)**
@@ -642,24 +685,37 @@ tracing, resilience and passing tests — this is **v1.0**.
 
 Resolve during the relevant phase, not now:
 
-- Pure-Dart `.proto` parser — v1.1, after the protoc path is proven.
-- Whether contract codegen runs via `build_runner` or a standalone `laska contract generate` — Phase 2 start.
+- ~~Pure-Dart `.proto` parser~~ — done in Phase 2 (§4.3); `protoc` stays as a CI cross-check.
+- Whether contract codegen runs via `build_runner` or a standalone `laska contract generate` —
+  Phase 2 start.
 - `Tracer` implementation if `dartastic_opentelemetry` changes ownership — Phase 3.
 - Broker choice for the queue backend (Postgres `SKIP LOCKED` vs NATS vs Redis Streams) — Phase 4.
 - Language priority for foreign client SDKs (Go first, then PHP/Python/TS) — Phase 2.
 - Whether `laska` ships a VS Code extension / language server — after v1.0.
+- Whether the umbrella package `laska` is published to pub.dev or stays a workspace root — before
+  the first release.
 
 ---
 
 ## 10. Immediate next steps
 
-1. Confirm this plan (or amend §6 phases).
-2. Phase 0: create the pub workspace skeleton and move `lib/` → `packages/laska_core/`.
-3. Replace the vendored `http_body.dart` with `package:http_parser`.
-4. Write the router v2 spec as tests first (constraints, groups, 405), then implement.
-5. Land `laska serve` + the supervisor with graceful shutdown.
-6. Prototype the contract pipeline early (Phase 2 is the risk): one `.proto` → REST route + Dart
-   client + OpenAPI + a failing `contract diff`. Everything else is downstream of this.
+Phase 1 (core runtime) and Phase 2 (contract pipeline, vertical slice) are implemented. The next
+phase is Phase 3 — observability — because the middleware chain is already the single
+instrumentation point, so tracing and metrics can be added without touching the public API.
+
+1. **Phase 3 — the `Tracer`/`Meter` abstraction** over `dartastic_opentelemetry`, with the
+   `OTEL_*` environment variables, so an existing collector works without Laska-specific setup.
+2. **Auto-instrumentation as built-in middleware**: spans for inbound requests and outbound calls,
+   `trace_id`/`span_id`/`request_id` on every log line, SQL spans around the `Database` layer.
+3. **`/metrics` in the Prometheus text format**, `/healthz` (liveness) and `/readyz` (readiness,
+   gated on the database) — registered by the framework, not by the service.
+4. **`laska dev`** — the workspace runner with aggregated logs and a local collector. This is the
+   command that delivers the "one command instead of five tools" promise in practice.
+5. **Foreign-language client generation** (`--lang=go` first) — it closes the loop with the
+   polyglot audience that the whole positioning rests on.
+
+Deferred to Phase 4+: resilience primitives (retry, circuit breaker, bulkhead, idempotency),
+the gRPC transport, the binary protobuf codec, and the DI container.
 
 ---
 

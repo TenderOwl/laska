@@ -1,16 +1,21 @@
+import 'db/database.dart';
+import 'dispatcher.dart';
 import 'middleware.dart';
+import 'response.dart';
 import 'router.dart';
 
 /// The application object.
 ///
-/// A `Laska` instance owns a [router] and the global middleware chain. Groups
-/// are created with [group] and share the router of their parent.
+/// A `Laska` instance owns a [router], the global middleware chain and the
+/// named middleware aliases. Groups are created with [group] and share the
+/// router of their parent.
 class Laska {
   /// Creates an application.
   Laska({
     Router? router,
     String prefix = '',
     List<Middleware> middleware = const <Middleware>[],
+    this.parent,
   })  : router = router ?? Router(),
         _prefix = prefix,
         middleware = List<Middleware>.of(middleware);
@@ -18,44 +23,105 @@ class Laska {
   /// The router holding every registered route.
   final Router router;
 
-  /// Middleware applied to routes registered through this instance.
+  /// The middleware applied before the middleware of the route.
+  ///
+  /// In the root application the middleware is global: it runs for every route
+  /// of the application, no matter whether the route was registered before or
+  /// after the middleware. In a group it runs for the routes of that group.
   final List<Middleware> middleware;
+
+  /// The group this instance belongs to, if any.
+  final Laska? parent;
+
+  /// Named middleware, referenced by routes as `middleware: ['auth']`.
+  final Map<String, Middleware> aliases = <String, Middleware>{};
+
+  /// The database of the service.
+  ///
+  /// The migration runner needs it, so a service registers its database here
+  /// and `laska migrate:run` can find it.
+  Database? database;
+
+  /// The directory holding the migration files.
+  String migrationsDirectory = 'migrations';
 
   final String _prefix;
 
-  /// Registers a global middleware.
+  late final Dispatcher _dispatcher = Dispatcher(this);
+
+  /// The dispatcher turning a [Request] into a [Response].
+  Dispatcher get dispatcher => _dispatcher;
+
+  /// Registers a middleware.
+  ///
+  /// In the root application the middleware is global: it runs before the
+  /// middleware of every group and of every route. In a group it runs for the
+  /// routes of that group.
   void use(Middleware middleware) {
     this.middleware.add(middleware);
   }
 
+  /// Registers a named middleware, so routes can refer to it by name.
+  void alias(String name, Middleware middleware) {
+    aliases[name] = middleware;
+  }
+
   /// Registers a `GET` route.
-  void get(String path, Handler handler,
-          {List<Middleware> middleware = const <Middleware>[]}) =>
-      add('GET', path, handler, middleware: middleware);
+  void get(
+    String path,
+    Handler handler, {
+    List<Object> middleware = const <Object>[],
+    String? name,
+  }) =>
+      add('GET', path, handler, middleware: middleware, name: name);
 
   /// Registers a `POST` route.
-  void post(String path, Handler handler,
-          {List<Middleware> middleware = const <Middleware>[]}) =>
-      add('POST', path, handler, middleware: middleware);
+  void post(
+    String path,
+    Handler handler, {
+    List<Object> middleware = const <Object>[],
+    String? name,
+  }) =>
+      add('POST', path, handler, middleware: middleware, name: name);
 
   /// Registers a `PUT` route.
-  void put(String path, Handler handler,
-          {List<Middleware> middleware = const <Middleware>[]}) =>
-      add('PUT', path, handler, middleware: middleware);
+  void put(
+    String path,
+    Handler handler, {
+    List<Object> middleware = const <Object>[],
+    String? name,
+  }) =>
+      add('PUT', path, handler, middleware: middleware, name: name);
 
   /// Registers a `PATCH` route.
-  void patch(String path, Handler handler,
-          {List<Middleware> middleware = const <Middleware>[]}) =>
-      add('PATCH', path, handler, middleware: middleware);
+  void patch(
+    String path,
+    Handler handler, {
+    List<Object> middleware = const <Object>[],
+    String? name,
+  }) =>
+      add('PATCH', path, handler, middleware: middleware, name: name);
 
   /// Registers a `DELETE` route.
-  void delete(String path, Handler handler,
-          {List<Middleware> middleware = const <Middleware>[]}) =>
-      add('DELETE', path, handler, middleware: middleware);
+  void delete(
+    String path,
+    Handler handler, {
+    List<Object> middleware = const <Object>[],
+    String? name,
+  }) =>
+      add('DELETE', path, handler, middleware: middleware, name: name);
 
   /// Registers a route answering to the common HTTP methods.
-  void any(String path, Handler handler,
-      {List<Middleware> middleware = const <Middleware>[]}) {
+  ///
+  /// The name is registered for the first method only, because a name points
+  /// at one route.
+  void any(
+    String path,
+    Handler handler, {
+    List<Object> middleware = const <Object>[],
+    String? name,
+  }) {
+    var first = true;
     for (final method in const <String>[
       'GET',
       'POST',
@@ -63,40 +129,93 @@ class Laska {
       'PATCH',
       'DELETE'
     ]) {
-      add(method, path, handler, middleware: middleware);
+      add(method, path, handler,
+          middleware: middleware, name: first ? name : null);
+      first = false;
     }
   }
 
   /// Registers a route for an arbitrary [method].
+  ///
+  /// Middleware can be passed as [Middleware] instances or as the names of
+  /// registered aliases. The middleware of the application and of the group
+  /// runs before it.
   void add(
     String method,
     String path,
     Handler handler, {
-    List<Middleware> middleware = const <Middleware>[],
+    List<Object> middleware = const <Object>[],
+    String? name,
   }) {
     router.add(
       method,
       _join(_prefix, path),
       handler,
-      middleware: <Middleware>[...this.middleware, ...middleware],
+      middleware: middleware.map(_resolveMiddleware).toList(),
+      name: name,
+      app: this,
     );
   }
 
   /// Registers routes under [prefix].
   ///
-  /// The middleware of the group is applied to every route registered inside
-  /// it, after the middleware of the parent group.
+  /// The middleware of the group runs after the middleware of the application
+  /// and before the middleware of the route.
   void group(
     String prefix,
     void Function(Laska group) callback, {
-    List<Middleware> middleware = const <Middleware>[],
+    List<Object> middleware = const <Object>[],
   }) {
     final child = Laska(
       router: router,
       prefix: _join(_prefix, prefix),
-      middleware: <Middleware>[...this.middleware, ...middleware],
+      parent: this,
+      middleware: middleware.map(_resolveMiddleware).toList(),
     );
     callback(child);
+  }
+
+  /// Builds the path of the route registered under [name].
+  String urlFor(String name, [Map<String, String> parameters = const {}]) =>
+      router.urlFor(name, parameters);
+
+  Middleware _resolveMiddleware(Object middleware) {
+    if (middleware is Middleware) {
+      return middleware;
+    }
+    if (middleware is String) {
+      final resolved = _findAlias(middleware);
+      if (resolved == null) {
+        throw ArgumentError(
+          'No middleware named "$middleware" is registered. '
+          'Register it with app.alias("$middleware", middleware).',
+        );
+      }
+      return resolved;
+    }
+    if (middleware is Function) {
+      // A middleware written as an untyped closure is adapted here, so a
+      // service may pass a plain `(request, next) async { ... }` literal.
+      final function = middleware as dynamic;
+      return (request, next) async {
+        final result = await function(request, next);
+        return result as Response;
+      };
+    }
+    throw ArgumentError(
+      'Middleware must be a Middleware or the name of an alias, '
+      'got ${middleware.runtimeType}.',
+    );
+  }
+
+  /// The middleware registered under [name], in this application or in one of
+  /// its groups.
+  Middleware? _findAlias(String name) {
+    final resolved = aliases[name];
+    if (resolved != null) {
+      return resolved;
+    }
+    return parent?._findAlias(name);
   }
 
   static String _join(String prefix, String path) {

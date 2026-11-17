@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:args/args.dart';
+import 'package:laska_core/laska_core.dart';
 import 'package:laska_contracts/laska_contracts.dart';
 
 /// The version of the CLI.
@@ -35,13 +36,20 @@ Future<void> main(List<String> arguments) async {
   switch (command.name) {
     case 'contract':
       await _runContract(command, commands);
+    case 'serve':
+      await _serve(command);
+    case 'route:list':
+      await _routeList(command);
+    case 'migrate:run':
+      await _migrate(command);
     default:
       stdout.writeln(parser.usage);
       exitCode = 64;
   }
 }
 
-({ArgParser parser, ArgParser compile, ArgParser diff}) _buildParser() {
+({ArgParser parser, ArgParser contract, ArgParser compile, ArgParser diff})
+    _buildParser() {
   final parser = ArgParser()
     ..addFlag(
       'version',
@@ -88,13 +96,53 @@ Future<void> main(List<String> arguments) async {
       help: 'Only report breaking changes.',
     );
 
-  // Referenced by the usage output.
-  return (parser: parser, compile: compile, diff: diff);
+  parser.addCommand('serve')
+    ..addOption(
+      'entrypoint',
+      help: 'Dart file of the service. Defaults to bin/server.dart.',
+    )
+    ..addOption(
+      'workers',
+      help: 'Number of worker processes. Defaults to the number of cores.',
+    )
+    ..addOption(
+      'port',
+      help: 'Port the workers bind to.',
+      defaultsTo: '3789',
+    )
+    ..addOption(
+      'address',
+      help: 'Address the workers bind to.',
+      defaultsTo: '0.0.0.0',
+    );
+
+  parser.addCommand('route:list').addOption(
+        'entrypoint',
+        help: 'Dart file of the service. Defaults to bin/server.dart.',
+      );
+
+  parser.addCommand('migrate:run')
+    ..addOption(
+      'entrypoint',
+      help: 'Dart file of the service. Defaults to bin/server.dart.',
+    )
+    ..addOption(
+      'directory',
+      help: 'Directory holding the migration files.',
+      defaultsTo: 'migrations',
+    );
+
+  return (parser: parser, contract: contract, compile: compile, diff: diff);
 }
 
 Future<void> _runContract(
   ArgResults command,
-  ({ArgParser parser, ArgParser compile, ArgParser diff}) commands,
+  ({
+    ArgParser parser,
+    ArgParser contract,
+    ArgParser compile,
+    ArgParser diff,
+  }) commands,
 ) async {
   final subcommand = command.command;
   if (subcommand == null) {
@@ -189,6 +237,92 @@ Future<void> _diff(ArgResults options) async {
   if (diff.hasBreakingChanges) {
     exitCode = 1;
   }
+}
+
+Future<void> _serve(ArgResults options) async {
+  final entrypoint = _resolveEntrypoint(options.option('entrypoint'));
+  if (entrypoint == null) {
+    return;
+  }
+
+  final supervisor = Supervisor(
+    SupervisorOptions(
+      entrypoint: entrypoint,
+      executable: Platform.resolvedExecutable,
+      workers: int.tryParse(options.option('workers') ?? ''),
+      address: options.option('address')!,
+      port: int.tryParse(options.option('port') ?? '') ?? 3789,
+      logger: Logger(service: 'laska'),
+    ),
+  );
+
+  await supervisor.run();
+}
+
+Future<void> _routeList(ArgResults options) async {
+  final entrypoint = _resolveEntrypoint(options.option('entrypoint'));
+  if (entrypoint == null) {
+    return;
+  }
+
+  final result = await Process.run(
+    Platform.resolvedExecutable,
+    <String>[entrypoint, routeListFlag],
+  );
+  stdout.write(result.stdout);
+  if (result.exitCode != 0) {
+    stderr.write(result.stderr);
+    exitCode = result.exitCode;
+  }
+}
+
+Future<void> _migrate(ArgResults options) async {
+  final entrypoint = _resolveEntrypoint(options.option('entrypoint'));
+  if (entrypoint == null) {
+    return;
+  }
+
+  final result = await Process.run(
+    Platform.resolvedExecutable,
+    <String>[entrypoint, migrateFlag],
+    environment: <String, String>{
+      ...Platform.environment,
+      'LASKA_MIGRATIONS_DIRECTORY': options.option('directory')!,
+    },
+  );
+  stdout.write(result.stdout);
+  if (result.exitCode != 0) {
+    stderr.write(result.stderr);
+    exitCode = result.exitCode;
+  }
+}
+
+/// Resolves the entrypoint of the service.
+///
+/// Returns `null` and reports the problem when no entrypoint can be found.
+String? _resolveEntrypoint(String? option) {
+  if (option != null) {
+    final file = File(option);
+    if (!file.existsSync()) {
+      stderr.writeln('The entrypoint "$option" does not exist.');
+      exitCode = 66;
+      return null;
+    }
+    return file.absolute.path;
+  }
+
+  for (final candidate in const <String>['bin/server.dart', 'bin/main.dart']) {
+    final file = File(candidate);
+    if (file.existsSync()) {
+      return file.absolute.path;
+    }
+  }
+
+  stderr.writeln(
+    'No entrypoint found. Pass --entrypoint with the Dart file of the service.',
+  );
+  exitCode = 66;
+  return null;
 }
 
 Future<Contract> _loadContract(String directory) async {

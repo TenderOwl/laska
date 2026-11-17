@@ -36,6 +36,9 @@ class Request {
   /// Route parameters captured by the router.
   final Map<String, String> params;
 
+  /// The id of the request, assigned by the request id middleware.
+  String? id;
+
   /// Returns the value of the [name] header, or `null` when it is absent.
   String? header(String name) => headers[name.toLowerCase()];
 
@@ -65,13 +68,17 @@ class Request {
   }
 
   /// Returns a copy of this request with the given [params].
-  Request copyWith({Map<String, String>? params}) => Request(
-        method: method,
-        path: path,
-        uri: uri,
-        query: query,
-        headers: headers,
-        body: body,
-        params: params ?? this.params,
-      );
+  Request copyWith({Map<String, String>? params}) {
+    final copy = Request(
+      method: method,
+      path: path,
+      uri: uri,
+      query: query,
+      headers: headers,
+      body: body,
+      params: params ?? this.params,
+    );
+    copy.id = id;
+    return copy;
+  }
 }

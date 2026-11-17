@@ -4,9 +4,13 @@ import '../generated/users.pb.dart';
 import 'service.dart';
 
 /// Starts the example service.
-Future<void> main() async {
+Future<void> main(List<String> arguments) async {
   final app = Laska();
   registerUsersService(app, UsersServiceImpl());
 
-  await run(app, port: 8080);
+  app.get('/', (ctx) async {
+    return ctx.text('Laska is here!');
+  });
+
+  await run(app, arguments: arguments, port: 8080);
 }

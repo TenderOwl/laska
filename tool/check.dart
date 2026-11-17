@@ -10,6 +10,7 @@ Future<void> main() async {
     'packages/laska_core',
     'packages/laska_contracts',
     'packages/laska_cli',
+    'packages/laska_test',
     'example/contract_slice',
   ];
 

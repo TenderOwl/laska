@@ -17,15 +17,16 @@ The long-term design and the roadmap behind these points live in [PLAN.md](PLAN.
 
 ## Current state
 
-Active development, **not for production use**. The contract pipeline is implemented and working
-end to end (see below); observability, resilience and the multi-service workspace are still to
-come.
+Active development, **not for production use**. The core runtime and the contract pipeline are
+implemented and working end to end (see below); observability, resilience and the multi-service
+workspace are still to come.
 
 | Package | What it holds |
 |---|---|
-| `packages/laska_core` | The runtime: routing, middleware, request/response, problem documents. |
+| `packages/laska_core` | The runtime: routing, middleware, request/response, problem documents, config, logging, the supervisor and the data layer. |
 | `packages/laska_contracts` | The contract pipeline: proto parser, code generator, OpenAPI export, breaking-change detection. |
 | `packages/laska_cli` | The `laska` command line interface. |
+| `packages/laska_test` | The test harness: an in-process HTTP client, expectation helpers and database helpers. |
 | `example/contract_slice` | A working vertical slice: contract → generated code → service → client. |
 
 ## Quick start
@@ -104,13 +105,16 @@ class UsersServiceImpl implements UsersService {
 ```
 
 ```dart
-Future<void> main() async {
+Future<void> main(List<String> arguments) async {
   final app = Laska();
   registerUsersService(app, UsersServiceImpl());
 
-  await run(app, port: 8080);
+  await run(app, arguments: arguments, port: 8080);
 }
 ```
+
+The arguments of `main` are handed to `run()`, so the framework flags (`--laska-route-list`,
+`--laska-migrate`) work no matter how the service is started.
 
 ### 4. Call it
 
@@ -138,7 +142,71 @@ The command exits with code `1` when a breaking change is found, so a pipeline f
 ```
 laska contract compile   --proto <dir> --out <dir> [--title <t>] [--version <v>]
 laska contract diff      --base <dir> --candidate <dir> [--quiet]
+laska serve              [--entrypoint <file>] [--workers <n>] [--address <addr>] [--port <port>]
+laska route:list         [--entrypoint <file>]
+laska migrate:run        [--entrypoint <file>] [--directory <dir>]
 ```
+
+`laska serve` runs the supervisor: it starts the worker processes of the service, shares the port
+between them, restarts the ones that crash and stops them all on a signal. `laska route:list`
+prints the route table of the service, and `laska migrate:run` applies the pending SQL migrations.
+
+> **Platform note.** On POSIX systems the workers share the port with SO_REUSEPORT and the kernel
+> balances the connections between them. On Windows it is SO_REUSEADDR, which does not balance —
+> the connections may all land on one worker — and the graceful stop is weaker, because a signal
+> terminates the worker immediately instead of letting it drain.
+
+## The runtime
+
+The runtime is small on purpose and has no hidden magic:
+
+```dart
+final app = Laska();
+
+app.alias('auth', (request, next) async {
+  if (request.header('authorization') == null) {
+    return Response.problem(401, 'Unauthorized', 'A token is required.');
+  }
+  return next();
+});
+
+app.group('/v1', (group) {
+  group.get('/users/:id<int>', (ctx) => ctx.json(<String, Object?>{
+        'id': ctx.params['id'],
+      }), name: 'user.show', middleware: ['auth']);
+
+  group.get('/users/:id?/files/*', (ctx) => ctx.text(ctx.params['*']!));
+});
+```
+
+- **Routing** — static segments, `:param`, `:param<int>` (also `float`, `bool`, `uuid`, `slug` and
+  custom regular expressions), optional `:param?` and the `*` wildcard. The priority is
+  deterministic, and a path that exists with another method answers `405` with an `Allow` header.
+- **Errors** — `HttpException(404, 'User was not found', code: 'user_not_found')` renders as an
+  RFC 9457 `application/problem+json` document.
+- **Middleware** — the order is global → group → route → handler, and a middleware may answer on
+  its own instead of calling `next`. The global middleware runs for every route, even for the
+  routes that were registered before it; the middleware of a group runs for the routes of that
+  group only.
+- **Config and logs** — `Config.string('PORT')` reads the environment first and the `.env` file
+  second; `Logger` writes one JSON object per line and redacts the secrets.
+- **Data** — `Database` over `package:postgres` and `package:sqlite3`, with SQL migrations applied
+  by `laska migrate:run` and recorded in a `schema_migrations` ledger.
+
+## Testing a service
+
+The harness runs the service in process, through the same dispatcher as the HTTP server:
+
+```dart
+final client = testClient(app);
+
+await client.get('/v1/users/42')
+    .expectStatus(200)
+    .expectJson(<String, Object?>{'id': '42'});
+```
+
+`withTestDatabase(database, (transaction) async { ... })` runs the body in a transaction that is
+rolled back afterwards, so a test never leaves data behind.
 
 ## Running the checks
 
