@@ -33,6 +33,27 @@ the packages are still to come.
 | `packages/laska_test` | The test harness: an in-process HTTP client, expectation helpers, database helpers, a fake tracer and a fake transport. |
 | `example/contract_slice` | A working vertical slice: contract → generated code → service → client. |
 
+## Installation
+
+The command line interface comes from pub.dev and needs the Dart SDK:
+
+```console
+$ dart pub global activate laska_cli
+$ laska --help
+```
+
+Without the Dart SDK, the [release](https://github.com/tenderowl/laska/releases)
+holds a bundle for every platform and the installer puts it in place. The
+installer checks the SHA-256 of the bundle before it unpacks it:
+
+```console
+$ curl -fsSL https://raw.githubusercontent.com/tenderowl/laska/main/tool/install.sh | sh
+```
+
+```powershell
+> irm https://raw.githubusercontent.com/tenderowl/laska/main/tool/install.ps1 | iex
+```
+
 ## Quick start
 
 ### 1. Write the contract

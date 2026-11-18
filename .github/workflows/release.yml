@@ -1,0 +1,145 @@
+name: Release
+
+# A release is a tag: `git tag v0.1.0` and `git push --tags`. The tag builds
+# the binaries of the command line interface for every platform, publishes the
+# packages on pub.dev and opens the release of the repository.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    name: The tag matches the version of the packages
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: version
+        name: Read the version of the packages
+        run: |
+          version=$(grep '^version:' packages/laska_cli/pubspec.yaml | awk '{print $2}')
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "The tag $GITHUB_REF_NAME does not match the version $version of the packages."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  binaries:
+    name: ${{ matrix.target }}
+    needs: check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+          - os: ubuntu-24.04-arm
+            target: linux-arm64
+          - os: macos-13
+            target: macos-x64
+          - os: macos-14
+            target: macos-arm64
+          - os: windows-latest
+            target: windows-x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: '3.14'
+
+      - name: Resolve the dependencies
+        run: dart pub get
+
+      - name: Build the bundle of the command line interface
+        working-directory: packages/laska_cli
+        run: dart build cli --target bin/laska.dart -o build/cli
+
+      - name: Check that the bundle answers
+        working-directory: packages/laska_cli
+        shell: bash
+        run: |
+          ls -R build/cli/bundle
+          ./build/cli/bundle/bin/laska* --help
+
+      - name: Pack the bundle
+        shell: bash
+        run: |
+          cd packages/laska_cli/build/cli/bundle
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            powershell -Compress-Archive -Path bin,lib -DestinationPath "laska-${{ matrix.target }}.zip"
+          else
+            zip -r "laska-${{ matrix.target }}.zip" bin lib
+          fi
+
+      - name: Write the checksum of the bundle
+        shell: bash
+        run: |
+          cd packages/laska_cli/build/cli/bundle
+          sha256sum "laska-${{ matrix.target }}.zip" > "laska-${{ matrix.target }}.zip.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: laska-${{ matrix.target }}
+          path: |
+            packages/laska_cli/build/cli/bundle/laska-${{ matrix.target }}.zip
+            packages/laska_cli/build/cli/bundle/laska-${{ matrix.target }}.zip.sha256
+
+  publish:
+    name: Publish the packages on pub.dev
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: '3.14'
+
+      - name: Resolve the dependencies
+        run: dart pub get
+
+      - name: Run the checks of the repository
+        run: dart run tool/check.dart
+
+      - name: Publish the packages
+        if: env.PUB_TOKEN != ''
+        env:
+          PUB_TOKEN: ${{ secrets.PUB_TOKEN }}
+        run: dart run tool/publish.dart --all
+
+      - name: Say that the packages are not published
+        if: env.PUB_TOKEN == ''
+        run: |
+          echo "The secret PUB_TOKEN is not set, so the packages are not published."
+          echo "The binaries of the release are built all the same."
+
+  release:
+    name: Open the release
+    needs: [check, binaries, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Write the checksums of every bundle
+        run: |
+          cd artifacts
+          sha256sum *.zip > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Open the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" artifacts/* --title "Laska $TAG" --generate-notes --verify-tag

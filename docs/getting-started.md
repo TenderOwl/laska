@@ -1,5 +1,40 @@
 # Getting started
 
+## Install the command
+
+The command line interface comes from pub.dev, and it needs the Dart SDK on the
+machine:
+
+```console
+$ dart pub global activate laska_cli
+$ laska --help
+```
+
+Without the Dart SDK, the [release](https://github.com/tenderowl/laska/releases)
+of the project holds a bundle for every platform, and the installer puts it in
+place:
+
+```console
+$ curl -fsSL https://raw.githubusercontent.com/tenderowl/laska/main/tool/install.sh | sh
+```
+
+```powershell
+> irm https://raw.githubusercontent.com/tenderowl/laska/main/tool/install.ps1 | iex
+```
+
+The installer checks the SHA-256 of the bundle before it unpacks it, and it
+prints the line that puts the command in the PATH:
+
+```console
+$ laska new shop
+```
+
+From a checkout of the repository, without installing anything:
+
+```console
+$ dart run laska_cli:laska new shop
+```
+
 ## Scaffold a service
 
 A service of Laska is a contract, an implementation and an entrypoint. The
@@ -36,9 +71,9 @@ contract, the generated client, the policy of the calls, the trace that goes
 from one service to the other — in a project that runs as it is.
 
 > A project that is scaffolded from a checkout of the repository depends on the
-> local workspace, because the packages are not published yet. The `--local`
-> flag writes that dependency; without it the project depends on the published
-> packages.
+> local workspace, because the checkout holds the sources of the packages and
+> not the published ones. The `--local` flag writes that dependency; without it
+> the project depends on the packages of pub.dev.
 
 ## Run the service
 

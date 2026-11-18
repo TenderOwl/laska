@@ -1,5 +1,24 @@
 ## Unreleased
 
+- **The distribution of the framework:**
+  - The packages of the workspace are ready for pub.dev: the metadata of the
+    four packages, the `LICENSE`, the `README.md` and the `CHANGELOG.md` of each
+    of them, and the `executables:` that names the command `laska`.
+  - `tool/publish.dart` publishes a package out of the workspace: it copies the
+    package, takes the `resolution: workspace` line out of the pubspec — a
+    package of a workspace cannot be published with it — and runs
+    `dart pub publish` there. The tree of the repository has to be clean, so
+    the files that are published are the files that are committed.
+  - The release is a tag: `.github/workflows/release.yml` checks that the tag
+    matches the version of the packages, builds the bundle of the command line
+    interface for Linux, macOS and Windows on x64 and on arm64, publishes the
+    packages on pub.dev and opens the release of the repository with the
+    archives and their checksums.
+  - The installer puts the command in place without the Dart SDK:
+    `tool/install.sh` and `tool/install.ps1` download the bundle of the
+    platform, check its SHA-256 before they unpack it and print the line that
+    puts the command in the PATH.
+
 - **Implemented the release hardening (Phase 6):**
   - **The authentication of the callers.** `laska_core/src/auth/` holds the tokens
     (`HS256`, `RS256/384/512`, `ES256/384/512`), the API keys, the sessions and the

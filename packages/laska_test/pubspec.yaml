@@ -1,7 +1,10 @@
 name: laska_test
 description: Test harness for Laska services — an in-process client, expectations and database helpers.
 version: 0.1.0
-publish_to: none
+repository: https://github.com/tenderowl/laska
+issue_tracker: https://github.com/tenderowl/laska/issues
+homepage: https://github.com/tenderowl/laska
+documentation: https://github.com/tenderowl/laska/tree/main/docs
 
 environment:
   sdk: ^3.6.0
