@@ -11,6 +11,7 @@ Future<void> main() async {
     'packages/laska_contracts',
     'packages/laska_cli',
     'packages/laska_test',
+    'example/auth_service',
     'example/contract_slice',
   ];
 
