@@ -49,6 +49,12 @@ class Request {
   /// the label values stays small.
   String? routePattern;
 
+  /// The idempotency key of the request, when it carries one.
+  ///
+  /// The idempotency middleware sets it, so a handler can use the key of the
+  /// caller to make its own work idempotent.
+  String? idempotencyKey;
+
   /// Returns the value of the [name] header, or `null` when it is absent.
   String? header(String name) => headers[name.toLowerCase()];
 
@@ -91,6 +97,7 @@ class Request {
     copy.id = id;
     copy.traceContext = traceContext;
     copy.routePattern = routePattern;
+    copy.idempotencyKey = idempotencyKey;
     return copy;
   }
 }

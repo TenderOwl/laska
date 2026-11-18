@@ -1,5 +1,39 @@
 ## Unreleased
 
+- **Implemented the inter-service and resilience layer (Phase 4):**
+  - **The policy of a call is written in the contract.** A service (or a single method) declares
+    `option (laska.policy) = { timeout_ms, max_attempts, backoff_ms, max_backoff_ms, jitter,
+    idempotent }`, the parser reads it, and the generator turns it into a `<Service>Policies` class
+    that the generated client applies to every call. The retry policy is therefore visible to
+    everyone who reads the contract, not only to the code of the caller.
+  - `DependencyPolicy`, `Dependency`, `CircuitBreaker`, `Bulkhead`, `RetryPolicy` and the error
+    taxonomy (`DependencyFailure`, `DependencyTimeoutException`, `CircuitOpenException`,
+    `BulkheadFullException`, `ServiceNotFoundException`) in `laska_core/src/resilience/`.
+    `Dependency` is the one place where the bulkhead, the breaker, the per-attempt timeout and the
+    retry loop meet, and it traces the call as one client span with the number of the attempts.
+  - Retries happen **only for idempotent calls**: a call that changes something is never repeated
+    and gets an `idempotency-key` header instead. The backoff grows exponentially, is capped, is
+    randomised with jitter and honours `Retry-After`.
+  - The breaker counts the **attempts**, not the calls: a dependency that fails three times in a
+    row opens the circuit, and the calls that follow fail fast with `503` instead of piling up.
+  - The bulkhead limits the concurrency per dependency, so one slow dependency cannot exhaust the
+    process; the queue of the waiting calls is bounded too.
+  - The idempotency store and its middleware replay the first answer of a repeated key and mark it
+    with the `idempotency-replayed` header.
+  - The transactional outbox: the business row and the event are written in one transaction, and a
+    dispatcher publishes the pending events and marks them sent — at-least-once delivery without a
+    distributed transaction.
+  - Static service discovery from `LASKA_SERVICES` or `<NAME>_URL`; an unknown service is an error
+    instead of a silent default.
+  - One error taxonomy: the HTTP status, the gRPC status and the machine readable code of every
+    failure of a dependency live in one place (`httpStatusOfError`, `errorCodeOf`).
+  - **Two transports for one contract**: `HttpServiceTransport` speaks JSON over the REST
+    projection, `GrpcServiceTransport` speaks the binary protobuf over the RPC path, and the
+    generated client works with both. The binary protobuf codec is pure Dart
+    (`ProtoWriter`/`ProtoReader`), so no `protoc` and no native toolchain are needed.
+  - `laska_test` gained a `TestTransport`: it answers with what the test prepared and records the
+    requests, so the retries, the breaker and the bulkhead of a client are covered without a
+    network.
 - **The command line interface has a help.** `laska --help` (or `laska -h`, or `laska help`) prints
   the list of the commands, the global options and the environment variables of the telemetry, and
   `laska help <command>` describes one command with its options and its defaults. Every command also

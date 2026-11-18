@@ -6,17 +6,30 @@ import "google/api/annotations.proto";
 
 // UsersService manages the accounts of the application.
 service UsersService {
+  // The policy of the calls to the service.
+  option (laska.policy) = {
+    timeout_ms: 2000
+    max_attempts: 3
+    backoff_ms: 100
+    max_backoff_ms: 2000
+    jitter: true
+  };
+
   // GetUser returns a single user by its identifier.
   rpc GetUser(GetUserRequest) returns (User) {
     option (google.api.http) = { get: "/v1/users/{id}" };
+    option (laska.policy) = { idempotent: true };
   }
 
   // ListUsers returns a page of users.
   rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {
     option (google.api.http) = { get: "/v1/users" };
+    option (laska.policy) = { idempotent: true };
   }
 
   // CreateUser creates a new user.
+  //
+  // The call changes something, so it is never retried.
   rpc CreateUser(CreateUserRequest) returns (User) {
     option (google.api.http) = { post: "/v1/users" body: "*" };
   }

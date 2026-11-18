@@ -12,14 +12,17 @@ import 'package:laska_core/laska_core.dart';
 
 /// The role a user has.
 enum UserRole {
-  userRoleUnspecified('USER_ROLE_UNSPECIFIED'),
-  userRoleAdmin('USER_ROLE_ADMIN'),
-  userRoleMember('USER_ROLE_MEMBER');
+  userRoleUnspecified('USER_ROLE_UNSPECIFIED', number: 0),
+  userRoleAdmin('USER_ROLE_ADMIN', number: 1),
+  userRoleMember('USER_ROLE_MEMBER', number: 2);
 
-  const UserRole(this.protoName);
+  const UserRole(this.protoName, {this.number = 0});
 
   /// The name of the value in the contract.
   final String protoName;
+
+  /// The number of the value on the wire.
+  final int number;
 
   /// Parses [raw] into a UserRole value.
   static UserRole fromName(Object? raw, {String? field}) {
@@ -34,6 +37,16 @@ enum UserRole {
       throw FormatException('Unknown UserRole value for $field: $raw');
     }
     throw FormatException('Unknown UserRole value: $raw');
+  }
+
+  /// Reads the value of the number [number].
+  static UserRole fromNumber(int number) {
+    for (final value in UserRole.values) {
+      if (value.number == number) {
+        return value;
+      }
+    }
+    return UserRole.userRoleUnspecified;
   }
 }
 
@@ -103,6 +116,63 @@ class User {
     'role': role.protoName,
     'tags': tags,
   };
+
+  /// The bytes of the message in the wire format of the protocol buffers.
+  List<int> toProtoBytes() {
+    final writer = ProtoWriter();
+    if (id != '') {
+      writer.writeString(1, id);
+    }
+    if (email != '') {
+      writer.writeString(2, email);
+    }
+    if (displayName != '') {
+      writer.writeString(3, displayName);
+    }
+    if (role.number != 0) {
+      writer.writeEnum(4, role.number);
+    }
+    for (final item in tags) {
+      writer.writeString(5, item);
+    }
+    return writer.toBytes();
+  }
+
+  /// Reads a message out of the wire format of the protocol buffers.
+  factory User.fromProtoBytes(List<int> bytes) {
+    final reader = ProtoReader(bytes);
+    var id = '';
+    var email = '';
+    var displayName = '';
+    var role = UserRole.userRoleUnspecified;
+    var tags = <String>[];
+
+    while (reader.hasNext) {
+      final tag = reader.readTag();
+      switch (tag) {
+        case 1:
+          id = reader.readString();
+        case 2:
+          email = reader.readString();
+        case 3:
+          displayName = reader.readString();
+        case 4:
+          role = UserRole.fromNumber(reader.readEnum());
+        case 5:
+          tags.add(reader.readString());
+        default:
+          reader.skipField();
+      }
+    }
+
+    return User(
+      id: id,
+      email: email,
+      displayName: displayName,
+      role: role,
+      tags: tags,
+    );
+  }
 }
 
 /// Request of the GetUser method.
@@ -123,6 +193,33 @@ class GetUserRequest {
 
   /// The JSON representation of the GetUserRequest.
   Map<String, dynamic> toJson() => <String, dynamic>{'id': id};
+
+  /// The bytes of the message in the wire format of the protocol buffers.
+  List<int> toProtoBytes() {
+    final writer = ProtoWriter();
+    if (id != '') {
+      writer.writeString(1, id);
+    }
+    return writer.toBytes();
+  }
+
+  /// Reads a message out of the wire format of the protocol buffers.
+  factory GetUserRequest.fromProtoBytes(List<int> bytes) {
+    final reader = ProtoReader(bytes);
+    var id = '';
+
+    while (reader.hasNext) {
+      final tag = reader.readTag();
+      switch (tag) {
+        case 1:
+          id = reader.readString();
+        default:
+          reader.skipField();
+      }
+    }
+
+    return GetUserRequest(id: id);
+  }
 }
 
 /// Request of the ListUsers method.
@@ -153,6 +250,39 @@ class ListUsersRequest {
     'limit': limit,
     'cursor': cursor,
   };
+
+  /// The bytes of the message in the wire format of the protocol buffers.
+  List<int> toProtoBytes() {
+    final writer = ProtoWriter();
+    if (limit != 0) {
+      writer.writeInt32(1, limit);
+    }
+    if (cursor != '') {
+      writer.writeString(2, cursor);
+    }
+    return writer.toBytes();
+  }
+
+  /// Reads a message out of the wire format of the protocol buffers.
+  factory ListUsersRequest.fromProtoBytes(List<int> bytes) {
+    final reader = ProtoReader(bytes);
+    var limit = 0;
+    var cursor = '';
+
+    while (reader.hasNext) {
+      final tag = reader.readTag();
+      switch (tag) {
+        case 1:
+          limit = reader.readInt32();
+        case 2:
+          cursor = reader.readString();
+        default:
+          reader.skipField();
+      }
+    }
+
+    return ListUsersRequest(limit: limit, cursor: cursor);
+  }
 }
 
 /// Response of the ListUsers method.
@@ -191,6 +321,39 @@ class ListUsersResponse {
     'users': users.map((item) => item.toJson()).toList(),
     'nextCursor': nextCursor,
   };
+
+  /// The bytes of the message in the wire format of the protocol buffers.
+  List<int> toProtoBytes() {
+    final writer = ProtoWriter();
+    for (final item in users) {
+      writer.writeMessage(1, item.toProtoBytes());
+    }
+    if (nextCursor != '') {
+      writer.writeString(2, nextCursor);
+    }
+    return writer.toBytes();
+  }
+
+  /// Reads a message out of the wire format of the protocol buffers.
+  factory ListUsersResponse.fromProtoBytes(List<int> bytes) {
+    final reader = ProtoReader(bytes);
+    var users = <User>[];
+    var nextCursor = '';
+
+    while (reader.hasNext) {
+      final tag = reader.readTag();
+      switch (tag) {
+        case 1:
+          users.add(User.fromProtoBytes(reader.readBytes()));
+        case 2:
+          nextCursor = reader.readString();
+        default:
+          reader.skipField();
+      }
+    }
+
+    return ListUsersResponse(users: users, nextCursor: nextCursor);
+  }
 }
 
 /// Request of the CreateUser method.
@@ -237,6 +400,49 @@ class CreateUserRequest {
     'displayName': displayName,
     'role': role.protoName,
   };
+
+  /// The bytes of the message in the wire format of the protocol buffers.
+  List<int> toProtoBytes() {
+    final writer = ProtoWriter();
+    if (email != '') {
+      writer.writeString(1, email);
+    }
+    if (displayName != '') {
+      writer.writeString(2, displayName);
+    }
+    if (role.number != 0) {
+      writer.writeEnum(3, role.number);
+    }
+    return writer.toBytes();
+  }
+
+  /// Reads a message out of the wire format of the protocol buffers.
+  factory CreateUserRequest.fromProtoBytes(List<int> bytes) {
+    final reader = ProtoReader(bytes);
+    var email = '';
+    var displayName = '';
+    var role = UserRole.userRoleUnspecified;
+
+    while (reader.hasNext) {
+      final tag = reader.readTag();
+      switch (tag) {
+        case 1:
+          email = reader.readString();
+        case 2:
+          displayName = reader.readString();
+        case 3:
+          role = UserRole.fromNumber(reader.readEnum());
+        default:
+          reader.skipField();
+      }
+    }
+
+    return CreateUserRequest(
+      email: email,
+      displayName: displayName,
+      role: role,
+    );
+  }
 }
 
 // Service UsersService
@@ -250,6 +456,7 @@ abstract class UsersService {
   Future<ListUsersResponse> listUsers(ListUsersRequest request);
 
   /// CreateUser creates a new user.
+  /// The call changes something, so it is never retried.
   Future<User> createUser(CreateUserRequest request);
 }
 
@@ -290,145 +497,269 @@ void registerUsersService(
   }, middleware: middleware);
 }
 
+/// The policies of the methods of the `UsersService` service.
+///
+/// The policies come from the `laska.policy` annotations of the
+/// contract, so the way a method is called is visible in the
+/// contract itself and not only in the code of the caller.
+class UsersServicePolicies {
+  const UsersServicePolicies._();
+
+  /// The policy of the `GetUser` method.
+  static final DependencyPolicy getUser = DependencyPolicy(
+    timeout: Duration(seconds: 2),
+    retry: RetryPolicy(
+      maxAttempts: 3,
+      initialBackoff: Duration(milliseconds: 100),
+      maxBackoff: Duration(seconds: 2),
+      jitter: true,
+    ),
+    idempotent: true,
+  );
+
+  /// The policy of the `ListUsers` method.
+  static final DependencyPolicy listUsers = DependencyPolicy(
+    timeout: Duration(seconds: 2),
+    retry: RetryPolicy(
+      maxAttempts: 3,
+      initialBackoff: Duration(milliseconds: 100),
+      maxBackoff: Duration(seconds: 2),
+      jitter: true,
+    ),
+    idempotent: true,
+  );
+
+  /// The policy of the `CreateUser` method.
+  static final DependencyPolicy createUser = DependencyPolicy(
+    timeout: Duration(seconds: 2),
+    retry: RetryPolicy(
+      maxAttempts: 3,
+      initialBackoff: Duration(milliseconds: 100),
+      maxBackoff: Duration(seconds: 2),
+      jitter: true,
+    ),
+  );
+
+  /// The policies of the methods, by the name of the method.
+  static final Map<String, DependencyPolicy> policies =
+      <String, DependencyPolicy>{
+        'GetUser': getUser,
+        'ListUsers': listUsers,
+        'CreateUser': createUser,
+      };
+}
+
 /// Typed client for the `UsersService` service.
 class UsersServiceClient {
   /// Creates a client talking to [baseUrl].
   UsersServiceClient({
     required this.baseUrl,
+    ServiceTransport? transport,
     http.Client? httpClient,
     Duration timeout = const Duration(seconds: 2),
     Tracer? tracer,
-  }) : _http = httpClient ?? http.Client(),
+    String dependencyName = 'UsersService',
+    DependencyPolicy policy = const DependencyPolicy(),
+    Map<String, DependencyPolicy>? policies,
+  }) : _transport =
+           transport ??
+           HttpServiceTransport(baseUrl: baseUrl, client: httpClient),
        // ignore: prefer_initializing_formals
        _timeout = timeout,
        // ignore: prefer_initializing_formals
-       _tracer = tracer;
+       _tracer = tracer,
+       // ignore: prefer_initializing_formals
+       _dependencyName = dependencyName,
+       // ignore: prefer_initializing_formals
+       _policy = policy,
+       // ignore: prefer_initializing_formals
+       _policies = <String, DependencyPolicy>{
+         ...UsersServicePolicies.policies,
+         ...?policies,
+       };
 
   /// Base URL of the service, e.g. `http://localhost:8080`.
   final String baseUrl;
 
-  final http.Client _http;
+  /// The transport the calls go through.
+  final ServiceTransport _transport;
+
+  /// The timeout of the calls that have no policy of their own.
   final Duration _timeout;
 
   /// The tracer of the client, when the calls are traced.
   final Tracer? _tracer;
 
+  /// The name of the dependency the calls go to.
+  final String _dependencyName;
+
+  /// The policy of the dependency.
+  ///
+  /// It holds the circuit breaker and the bulkhead of the
+  /// dependency, which every call of the client shares.
+  final DependencyPolicy _policy;
+
+  /// The policy of every method, by the name of the method.
+  final Map<String, DependencyPolicy> _policies;
+
+  /// The dependency the calls go through.
+  ///
+  /// The dependency holds the circuit breaker and the bulkhead
+  /// of the service, so every call of the client shares them.
+  late final Dependency _dependency = Dependency(
+    name: _dependencyName,
+    transport: _transport,
+    policy: _policy,
+    tracer: _tracer,
+  );
+
   /// GetUser returns a single user by its identifier.
-  Future<User> getUser(GetUserRequest request) async {
-    final uri = Uri.parse(
-      '$baseUrl/v1/users/${Uri.encodeComponent(request.id.toString())}',
+  Future<User> getUser(GetUserRequest request, {String? idempotencyKey}) async {
+    final uri = _transport.buildUri(
+      '/v1/users/${Uri.encodeComponent(request.id.toString())}',
+      '/users.v1.UsersService/GetUser',
     );
 
     final headers = <String, String>{'accept': 'application/json'};
 
-    final tracer = _tracer;
-    final span = tracer?.startSpan(
+    if (idempotencyKey != null) {
+      headers['idempotency-key'] = idempotencyKey;
+    }
+
+    final body = null;
+
+    final response = await _send(
+      'GetUser',
       'UsersService.GetUser',
-      kind: SpanKind.client,
-      attributes: <String, Object?>{
-        'rpc.service': 'UsersService',
-        'rpc.method': 'GetUser',
-      },
+      'get',
+      uri,
+      headers,
+      body,
     );
 
-    if (tracer != null && span != null) {
-      tracer.inject(span.context, headers);
-    }
-
-    try {
-      final response = await _http.get(uri, headers: headers).timeout(_timeout);
-      span?.setAttribute('http.response.status_code', response.statusCode);
-      if (response.statusCode >= 400) {
-        throw LaskaApiException(response.statusCode, response.body);
-      }
-      return User.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-    } catch (error, stackTrace) {
-      span?.recordError(error, stackTrace);
-      rethrow;
-    } finally {
-      span?.end();
-    }
+    return _transport.bodyFormat == BodyFormat.protobuf
+        ? User.fromProtoBytes(response.body)
+        : User.fromJson(jsonDecode(response.text) as Map<String, dynamic>);
   }
 
   /// ListUsers returns a page of users.
-  Future<ListUsersResponse> listUsers(ListUsersRequest request) async {
+  Future<ListUsersResponse> listUsers(
+    ListUsersRequest request, {
+    String? idempotencyKey,
+  }) async {
     final query = <String, String>{};
     query['limit'] = request.limit.toString();
     query['cursor'] = request.cursor.toString();
 
-    final uri = Uri.parse('$baseUrl/v1/users')
+    final uri = _transport
+        .buildUri('/v1/users', '/users.v1.UsersService/ListUsers')
         .replace(queryParameters: query.isEmpty ? null : query);
 
     final headers = <String, String>{'accept': 'application/json'};
 
-    final tracer = _tracer;
-    final span = tracer?.startSpan(
+    if (idempotencyKey != null) {
+      headers['idempotency-key'] = idempotencyKey;
+    }
+
+    final body = null;
+
+    final response = await _send(
+      'ListUsers',
       'UsersService.ListUsers',
-      kind: SpanKind.client,
-      attributes: <String, Object?>{
-        'rpc.service': 'UsersService',
-        'rpc.method': 'ListUsers',
-      },
+      'get',
+      uri,
+      headers,
+      body,
     );
 
-    if (tracer != null && span != null) {
-      tracer.inject(span.context, headers);
-    }
-
-    try {
-      final response = await _http.get(uri, headers: headers).timeout(_timeout);
-      span?.setAttribute('http.response.status_code', response.statusCode);
-      if (response.statusCode >= 400) {
-        throw LaskaApiException(response.statusCode, response.body);
-      }
-      return ListUsersResponse.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>,
-      );
-    } catch (error, stackTrace) {
-      span?.recordError(error, stackTrace);
-      rethrow;
-    } finally {
-      span?.end();
-    }
+    return _transport.bodyFormat == BodyFormat.protobuf
+        ? ListUsersResponse.fromProtoBytes(response.body)
+        : ListUsersResponse.fromJson(
+            jsonDecode(response.text) as Map<String, dynamic>,
+          );
   }
 
   /// CreateUser creates a new user.
-  Future<User> createUser(CreateUserRequest request) async {
-    final uri = Uri.parse('$baseUrl/v1/users');
+  /// The call changes something, so it is never retried.
+  Future<User> createUser(
+    CreateUserRequest request, {
+    String? idempotencyKey,
+  }) async {
+    final uri = _transport.buildUri(
+      '/v1/users',
+      '/users.v1.UsersService/CreateUser',
+    );
 
     final headers = <String, String>{
       'accept': 'application/json',
       'content-type': 'application/json',
     };
 
-    final tracer = _tracer;
-    final span = tracer?.startSpan(
+    final key = idempotencyKey ?? newIdempotencyKey();
+    headers['idempotency-key'] = key;
+
+    final body = _transport.bodyFormat == BodyFormat.protobuf
+        ? request.toProtoBytes()
+        : utf8.encode(jsonEncode(request.toJson()));
+
+    final response = await _send(
+      'CreateUser',
       'UsersService.CreateUser',
-      kind: SpanKind.client,
-      attributes: <String, Object?>{
-        'rpc.service': 'UsersService',
-        'rpc.method': 'CreateUser',
-      },
+      'post',
+      uri,
+      headers,
+      body,
     );
 
-    if (tracer != null && span != null) {
-      tracer.inject(span.context, headers);
-    }
+    return _transport.bodyFormat == BodyFormat.protobuf
+        ? User.fromProtoBytes(response.body)
+        : User.fromJson(jsonDecode(response.text) as Map<String, dynamic>);
+  }
 
+  /// Sends the request of a method of the service.
+  ///
+  /// The policy of the method decides how the call is timed out,
+  /// how often it is retried and whether it may be retried at all.
+  Future<TransportResponse> _send(
+    String method,
+    String operation,
+    String verb,
+    Uri uri,
+    Map<String, String> headers,
+    List<int>? body,
+  ) async {
+    final methodPolicy = _policies[method];
+    final effectivePolicy = methodPolicy == null
+        ? DependencyPolicy(timeout: _timeout)
+        : methodPolicy.copyWith(timeout: methodPolicy.timeout ?? _timeout);
     try {
-      final response = await _http
-          .post(uri, headers: headers, body: jsonEncode(request.toJson()))
-          .timeout(_timeout);
-      span?.setAttribute('http.response.status_code', response.statusCode);
-      if (response.statusCode >= 400) {
-        throw LaskaApiException(response.statusCode, response.body);
-      }
-      return User.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-    } catch (error, stackTrace) {
-      span?.recordError(error, stackTrace);
-      rethrow;
-    } finally {
-      span?.end();
+      return await _dependency.call(
+        TransportRequest(
+          method: verb,
+          uri: uri,
+          headers: headers,
+          body: body,
+          contentType: body == null
+              ? null
+              : _transport.bodyFormat == BodyFormat.protobuf
+              ? "application/protobuf"
+              : "application/json",
+        ),
+        policy: effectivePolicy,
+        operation: operation,
+        attributes: <String, Object?>{
+          'http.request.method': verb,
+          'url.path': uri.path,
+        },
+      );
+    } on DependencyFailure catch (error) {
+      throw LaskaApiException(error.statusCode ?? 502, error.body);
+    } on DependencyTimeoutException catch (error) {
+      throw LaskaApiException(504, error.toString());
+    } on CircuitOpenException catch (error) {
+      throw LaskaApiException(503, error.toString());
+    } on BulkheadFullException catch (error) {
+      throw LaskaApiException(503, error.toString());
     }
   }
 }

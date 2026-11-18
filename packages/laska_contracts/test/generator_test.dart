@@ -75,7 +75,7 @@ void main() {
 
     test('generates the enum with its proto names', () {
       expect(code(), contains('enum UserRole {'));
-      expect(code(), contains("userRoleAdmin('USER_ROLE_ADMIN')"));
+      expect(code(), contains("userRoleAdmin('USER_ROLE_ADMIN', number: 1)"));
       expect(code(), contains('static UserRole fromName('));
     });
 

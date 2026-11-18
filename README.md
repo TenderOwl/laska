@@ -17,8 +17,8 @@ The long-term design and the roadmap behind these points live in [PLAN.md](PLAN.
 
 ## Current state
 
-Active development, **not for production use**. The core runtime, the contract pipeline and the
-observability layer are implemented and working end to end (see below); resilience, the
+Active development, **not for production use**. The core runtime, the contract pipeline, the
+observability layer and the resilience layer are implemented and working end to end (see below); the
 multi-service workspace and the foreign-language SDKs are still to come.
 
 | Package | What it holds |
@@ -26,7 +26,7 @@ multi-service workspace and the foreign-language SDKs are still to come.
 | `packages/laska_core` | The runtime: routing, middleware, request/response, problem documents, config, logging, the supervisor, the data layer and the telemetry. |
 | `packages/laska_contracts` | The contract pipeline: proto parser, code generator, OpenAPI export, breaking-change detection. |
 | `packages/laska_cli` | The `laska` command line interface. |
-| `packages/laska_test` | The test harness: an in-process HTTP client, expectation helpers, database helpers and a fake tracer. |
+| `packages/laska_test` | The test harness: an in-process HTTP client, expectation helpers, database helpers, a fake tracer and a fake transport. |
 | `example/contract_slice` | A working vertical slice: contract → generated code → service → client. |
 
 ## Quick start
@@ -175,8 +175,75 @@ $ export OTEL_SERVICE_NAME=users
 $ export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 ```
 
-### The workspace runner
+## Resilience
 
+The way a service is called is written **in the contract**, not in the configuration of every
+caller:
+
+```proto
+service UsersService {
+  // The policy of the calls to the service.
+  option (laska.policy) = {
+    timeout_ms: 2000
+    max_attempts: 3
+    backoff_ms: 100
+    max_backoff_ms: 2000
+    jitter: true
+  };
+
+  // GetUser returns a single user by its identifier.
+  rpc GetUser(GetUserRequest) returns (User) {
+    option (google.api.http) = { get: "/v1/users/{id}" };
+    option (laska.policy) = { idempotent: true };
+  }
+
+  // CreateUser creates a new user: the call changes something, so it is never retried.
+  rpc CreateUser(CreateUserRequest) returns (User) {
+    option (google.api.http) = { post: "/v1/users" body: "*" };
+  }
+}
+```
+
+The generator turns the policy into a class, and the generated client applies it to every call:
+
+```dart
+UsersServicePolicies.getUser.timeout;           // 2s
+UsersServicePolicies.getUser.retry.maxAttempts;  // 3
+UsersServicePolicies.createUser.idempotent;     // false
+```
+
+What the runtime does with it:
+
+- **Timeout** on every attempt (2s by default) — a call without a timeout is a bug.
+- **Retry** with an exponential backoff and jitter, honouring `Retry-After`. Only the idempotent
+  calls are repeated: a call that changes something is never retried, and the generated client
+  sends an `idempotency-key` with it instead.
+- **Circuit breaker** per dependency: closed → open → half-open. When the circuit is open the call
+  fails fast with `503` instead of waiting for a timeout, so a failing dependency does not pile up.
+- **Bulkhead** per dependency: a concurrency limit, so one slow dependency cannot exhaust the
+  process.
+- **One error taxonomy**: `DependencyFailure`, `DependencyTimeoutException`, `CircuitOpenException`
+  and `BulkheadFullException` map to one HTTP status and one gRPC status, whatever transport the
+  dependency speaks.
+
+The breaker and the bulkhead belong to the dependency, so they are configured on the client:
+
+```dart
+final client = UsersServiceClient(
+  baseUrl: 'http://127.0.0.1:8080',
+  policy: const DependencyPolicy(
+    circuitBreaker: CircuitBreakerPolicy(failureThreshold: 5),
+    bulkhead: BulkheadPolicy(maxConcurrent: 16),
+  ),
+);
+```
+
+The same contract speaks two transports: `HttpServiceTransport` (JSON over the REST projection)
+and `GrpcServiceTransport` (binary protobuf over the RPC path). The outbox writes the business row
+and the event in one transaction and publishes them afterwards, and the discovery resolves the
+address of a dependency from `LASKA_SERVICES` or `<NAME>_URL`.
+
+### The workspace runner
 `laska dev` starts every service of the workspace, aggregates their logs in one stream and points
 them at a local collector that prints the traces it receives:
 
@@ -292,6 +359,22 @@ await client.get('/v1/users/42')
 
 `withTestDatabase(database, (transaction) async { ... })` runs the body in a transaction that is
 rolled back afterwards, so a test never leaves data behind.
+
+A generated client is exercised without a network too: `TestTransport` answers with what the test
+prepared and records the requests it received, so the retries, the breaker and the bulkhead of the
+client are covered by a unit test.
+
+```dart
+final transport = TestTransport()..alwaysRespond(TransportResponse(statusCode: 503));
+
+final client = UsersServiceClient(
+  baseUrl: 'http://127.0.0.1:8080',
+  transport: transport,
+);
+
+await expectLater(client.getUser(const GetUserRequest(id: 'u_1')), throwsA(isA<LaskaApiException>()));
+expect(transport.callCount, 3); // the call was retried twice
+```
 
 ## Running the checks
 

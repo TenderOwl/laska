@@ -75,7 +75,7 @@ class DartGenerator {
 
     final referenced = _referencedTypes(file);
     final needsJson = messages.isNotEmpty || services.isNotEmpty;
-    final needsCore = services.isNotEmpty;
+    final needsCore = services.isNotEmpty || messages.isNotEmpty;
     final needsHttp = services.any((service) => service.methods.isNotEmpty);
 
     if (needsJson) {
@@ -104,6 +104,20 @@ class DartGenerator {
       }
     }
 
+    if (_needsEnumNumber(services)) {
+      writer.write(
+        '/// Reads the number of an enum value out of the bytes of the wire',
+      );
+      writer.write('/// format of the protocol buffers.');
+      writer.write('int _enumNumber(List<int> bytes) {');
+      writer.indent();
+      writer.write('final reader = ProtoReader(bytes);');
+      writer.write('return reader.hasNext ? reader.readVarint() : 0;');
+      writer.dedent();
+      writer.write('}');
+      writer.blank();
+    }
+
     if (messages.isNotEmpty) {
       writer.write('// Messages');
       writer.blank();
@@ -121,12 +135,134 @@ class DartGenerator {
       if (service.methods.any((method) => method.httpRules.isNotEmpty)) {
         _writeRouter(writer, service);
         writer.blank();
+      }
+      if (_hasPolicies(service)) {
+        _writePolicies(writer, service);
+        writer.blank();
+      }
+      if (service.methods.any((method) => method.httpRules.isNotEmpty)) {
         _writeClient(writer, service);
         writer.blank();
       }
     }
 
     return writer.text;
+  }
+
+  /// Whether the service declares a policy for one of its methods.
+  bool _hasPolicies(Service service) => service.methods.any(
+        (method) => !_policyOf(service, method).isEmpty,
+      );
+
+  /// Whether one of the methods of the services answers with an enum.
+  bool _needsEnumNumber(List<Service> services) {
+    for (final service in services) {
+      for (final method in service.methods) {
+        if (_types.findEnum(method.responseType) != null) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /// Writes the policies of the methods of the service.
+  void _writePolicies(_Writer writer, Service service) {
+    final name = pascalCase(service.name);
+    writer.write('/// The policies of the methods of the `$name` service.');
+    writer.write('///');
+    writer.write(
+        '/// The policies come from the `laska.policy` annotations of the');
+    writer
+        .write('/// contract, so the way a method is called is visible in the');
+    writer.write('/// contract itself and not only in the code of the caller.');
+    writer.write('class ${name}Policies {');
+    writer.indent();
+    writer.write('const ${name}Policies._();');
+    writer.blank();
+
+    for (final method in service.methods) {
+      final policy = _policyOf(service, method);
+      if (policy.isEmpty) {
+        continue;
+      }
+      writer.write('/// The policy of the `${method.name}` method.');
+      writer.write(
+        'static final DependencyPolicy ${camelCase(method.name)} =',
+      );
+      writer.indent();
+      writer.write('${_policyExpression(policy)};');
+      writer.dedent();
+      writer.blank();
+    }
+
+    writer.write('/// The policies of the methods, by the name of the method.');
+    writer.write(
+      'static final Map<String, DependencyPolicy> policies =',
+    );
+    writer.indent();
+    writer.write('<String, DependencyPolicy>{');
+    for (final method in service.methods) {
+      final policy = _policyOf(service, method);
+      if (policy.isEmpty) {
+        continue;
+      }
+      writer.write("'${method.name}': ${camelCase(method.name)},");
+    }
+    writer.write('};');
+    writer.dedent();
+    writer.dedent();
+    writer.write('}');
+  }
+
+  /// The policy of a method, with the policy of the service under it.
+  MethodPolicy _policyOf(Service service, Method method) {
+    final servicePolicy = service.policy;
+    final methodPolicy = method.policy;
+    if (servicePolicy == null) {
+      return methodPolicy ?? MethodPolicy();
+    }
+    return servicePolicy.merge(methodPolicy);
+  }
+
+  /// The code of a policy of the contract.
+  String _policyExpression(MethodPolicy policy) {
+    final parts = <String>[];
+
+    if (policy.timeout != null) {
+      parts.add('timeout: ${_durationExpression(policy.timeout!)}');
+    }
+
+    final retry = <String>[];
+    if (policy.maxAttempts != null) {
+      retry.add('maxAttempts: ${policy.maxAttempts}');
+    }
+    if (policy.backoff != null) {
+      retry.add('initialBackoff: ${_durationExpression(policy.backoff!)}');
+    }
+    if (policy.maxBackoff != null) {
+      retry.add('maxBackoff: ${_durationExpression(policy.maxBackoff!)}');
+    }
+    if (policy.jitter != null) {
+      retry.add('jitter: ${policy.jitter}');
+    }
+    if (retry.isNotEmpty) {
+      parts.add('retry: RetryPolicy(${retry.join(', ')})');
+    }
+
+    if (policy.idempotent != null) {
+      parts.add('idempotent: ${policy.idempotent}');
+    }
+
+    return 'DependencyPolicy(${parts.join(', ')})';
+  }
+
+  /// The code of a duration.
+  String _durationExpression(Duration duration) {
+    if (duration.inMilliseconds % 1000 == 0) {
+      return 'Duration(seconds: ${duration.inSeconds})';
+    }
+    return 'Duration(milliseconds: ${duration.inMilliseconds})';
   }
 
   void _writeEnum(_Writer writer, EnumType enumType) {
@@ -140,13 +276,18 @@ class DartGenerator {
       final constant = enumConstantName(value.name);
       final separator = i == enumType.values.length - 1 ? ';' : ',';
       _writeDoc(writer, value.comment, null);
-      writer.write("$constant('${value.name}')$separator");
+      writer.write(
+        "$constant('${value.name}', number: ${value.number})$separator",
+      );
     }
     writer.blank();
-    writer.write('const $name(this.protoName);');
+    writer.write('const $name(this.protoName, {this.number = 0});');
     writer.blank();
     writer.write('/// The name of the value in the contract.');
     writer.write('final String protoName;');
+    writer.blank();
+    writer.write('/// The number of the value on the wire.');
+    writer.write('final int number;');
     writer.blank();
     writer.write('/// Parses [raw] into a $name value.');
     writer.write('static $name fromName(Object? raw, {String? field}) {');
@@ -172,6 +313,24 @@ class DartGenerator {
     writer.dedent();
     writer.write('}');
     writer.write("throw FormatException('Unknown $name value: \$raw');");
+    writer.dedent();
+    writer.write('}');
+    writer.blank();
+    writer.write('/// Reads the value of the number [number].');
+    writer.write('static $name fromNumber(int number) {');
+    writer.indent();
+    writer.write('for (final value in $name.values) {');
+    writer.indent();
+    writer.write('if (value.number == number) {');
+    writer.indent();
+    writer.write('return value;');
+    writer.dedent();
+    writer.write('}');
+    writer.dedent();
+    writer.write('}');
+    writer.write(
+      'return $name.${enumConstantName(enumType.values.first.name)};',
+    );
     writer.dedent();
     writer.write('}');
     writer.dedent();
@@ -248,7 +407,355 @@ class DartGenerator {
     writer.dedent();
     writer.write('};');
     writer.dedent();
+    writer.blank();
+
+    _writeProtoWriter(writer, message);
+    _writeProtoReader(writer, message);
+
+    writer.dedent();
     writer.write('}');
+  }
+
+  /// Writes the method that holds the bytes of the message.
+  void _writeProtoWriter(_Writer writer, Message message) {
+    writer.write(
+      '/// The bytes of the message in the wire format of the protocol buffers.',
+    );
+    writer.write('List<int> toProtoBytes() {');
+    writer.indent();
+    writer.write('final writer = ProtoWriter();');
+    for (final field in message.fields) {
+      _writeProtoValue(writer, message, field);
+    }
+    writer.write('return writer.toBytes();');
+    writer.dedent();
+    writer.write('}');
+    writer.blank();
+  }
+
+  /// Writes the method that reads the message out of its bytes.
+  void _writeProtoReader(_Writer writer, Message message) {
+    final name = pascalCase(message.name);
+    writer.write(
+      '/// Reads a message out of the wire format of the protocol buffers.',
+    );
+    writer.write('factory $name.fromProtoBytes(List<int> bytes) {');
+    writer.indent();
+    writer.write('final reader = ProtoReader(bytes);');
+
+    for (final field in message.fields) {
+      final type = _types.resolve(field);
+      final property = camelCase(field.name);
+      if (field.repeated) {
+        writer.write('var $property = <${_elementType(type.dartType)}>[];');
+      } else if (field.optional) {
+        writer.write('var $property = <${type.dartType}>?;');
+      } else if (type.isMessage) {
+        writer.write('var $property = <${type.dartType}>?;');
+      } else if (type.isEnum) {
+        writer.write(
+          'var $property = ${type.enumName}.'
+          '${enumConstantName(_enumOf(type).values.first.name)};',
+        );
+      } else {
+        writer.write('var $property = ${_defaultOf(type)};');
+      }
+    }
+    writer.blank();
+
+    writer.write('while (reader.hasNext) {');
+    writer.indent();
+    writer.write('final tag = reader.readTag();');
+    writer.write('switch (tag) {');
+    for (final field in message.fields) {
+      writer.write('case ${field.number}:');
+      writer.indent();
+      _writeProtoRead(writer, message, field);
+      writer.dedent();
+    }
+    writer.write('default:');
+    writer.indent();
+    writer.write('reader.skipField();');
+    writer.dedent();
+    writer.dedent();
+    writer.write('}');
+    writer.dedent();
+    writer.write('}');
+    writer.blank();
+
+    for (final field in message.fields) {
+      final type = _types.resolve(field);
+      if (type.isMessage && !field.repeated && !field.optional) {
+        final property = camelCase(field.name);
+        writer.write('if ($property == null) {');
+        writer.indent();
+        writer.write(
+          "throw FormatException("
+          "'The message \"$name\" needs the field \"$property\".');",
+        );
+        writer.dedent();
+        writer.write('}');
+      }
+    }
+
+    writer.write('return $name(');
+    writer.indent();
+    for (final field in message.fields) {
+      final property = camelCase(field.name);
+      writer.write('$property: $property,');
+    }
+    writer.dedent();
+    writer.write(');');
+    writer.dedent();
+    writer.write('}');
+  }
+
+  /// Writes the code that puts the value of a field on the wire.
+  void _writeProtoValue(_Writer writer, Message message, Field field) {
+    final type = _types.resolve(field);
+    final property = camelCase(field.name);
+    final number = field.number;
+
+    if (field.repeated) {
+      writer.write('for (final item in $property) {');
+      writer.indent();
+      if (type.isMessage) {
+        writer.write(
+          'writer.writeMessage($number, item.toProtoBytes());',
+        );
+      } else if (type.isEnum) {
+        writer.write('writer.writeEnum($number, item.number);');
+      } else {
+        writer.write('writer.${_protoWriterOf(type)}($number, item);');
+      }
+      writer.dedent();
+      writer.write('}');
+      return;
+    }
+
+    if (field.optional) {
+      writer.write('if ($property != null) {');
+      writer.indent();
+      if (type.isMessage) {
+        writer.write(
+          'writer.writeMessage($number, $property!.toProtoBytes());',
+        );
+      } else if (type.isEnum) {
+        writer.write('writer.writeEnum($number, $property!.number);');
+      } else {
+        writer.write('writer.${_protoWriterOf(type)}($number, $property!);');
+      }
+      writer.dedent();
+      writer.write('}');
+      return;
+    }
+
+    if (type.isMessage) {
+      writer.write('writer.writeMessage($number, $property.toProtoBytes());');
+      return;
+    }
+
+    if (type.isEnum) {
+      writer.write('if ($property.number != 0) {');
+      writer.indent();
+      writer.write('writer.writeEnum($number, $property.number);');
+      writer.dedent();
+      writer.write('}');
+      return;
+    }
+
+    writer.write('if ($property != ${_defaultOf(type)}) {');
+    writer.indent();
+    writer.write('writer.${_protoWriterOf(type)}($number, $property);');
+    writer.dedent();
+    writer.write('}');
+  }
+
+  /// Writes the code that reads the value of a field from the wire.
+  void _writeProtoRead(_Writer writer, Message message, Field field) {
+    final type = _types.resolve(field);
+    final property = camelCase(field.name);
+
+    if (field.repeated) {
+      if (type.isMessage) {
+        writer.write(
+          '$property.add('
+          '${type.messageName}.fromProtoBytes(reader.readBytes()));',
+        );
+        return;
+      }
+      if (type.isEnum) {
+        writer.write(
+          '$property.addAll('
+          'reader.readRepeatedVarint(<int>[]).map(${type.enumName}.fromNumber));',
+        );
+        return;
+      }
+      if (type.protoType == 'bool') {
+        writer.write(
+          '$property.addAll('
+          'reader.readRepeatedVarint(<int>[]).map((value) => value != 0));',
+        );
+        return;
+      }
+      if (type.protoType == 'string') {
+        writer.write('$property.add(reader.readString());');
+        return;
+      }
+      if (type.protoType == 'bytes') {
+        writer.write('$property.add(reader.readBytes());');
+        return;
+      }
+      writer.write(
+        '$property.addAll(reader.${_protoRepeatedReaderOf(type)}(<int>[]));',
+      );
+      return;
+    }
+
+    if (type.isMessage) {
+      writer.write(
+        '$property = ${type.messageName}.fromProtoBytes(reader.readBytes());',
+      );
+      return;
+    }
+
+    if (type.isEnum) {
+      writer
+          .write('$property = ${type.enumName}.fromNumber(reader.readEnum());');
+      return;
+    }
+
+    writer.write('$property = reader.${_protoReaderOf(type)}();');
+  }
+
+  /// The method of the writer that writes a value of the type [type].
+  String _protoWriterOf(DartType type) {
+    switch (type.protoType) {
+      case 'string':
+        return 'writeString';
+      case 'bytes':
+        return 'writeBytes';
+      case 'bool':
+        return 'writeBool';
+      case 'int32':
+        return 'writeInt32';
+      case 'int64':
+        return 'writeInt64';
+      case 'uint32':
+        return 'writeUInt32';
+      case 'uint64':
+        return 'writeUInt64';
+      case 'sint32':
+        return 'writeSInt32';
+      case 'sint64':
+        return 'writeSInt64';
+      case 'fixed32':
+        return 'writeFixed32';
+      case 'fixed64':
+        return 'writeFixed64';
+      case 'sfixed32':
+        return 'writeSFixed32';
+      case 'sfixed64':
+        return 'writeSFixed64';
+      case 'float':
+        return 'writeFloat';
+      case 'double':
+        return 'writeDouble';
+      default:
+        throw StateError('Unknown contract type "${type.protoType}"');
+    }
+  }
+
+  /// The method of the reader that reads a value of the type [type].
+  String _protoReaderOf(DartType type) {
+    switch (type.protoType) {
+      case 'string':
+        return 'readString';
+      case 'bytes':
+        return 'readBytes';
+      case 'bool':
+        return 'readBool';
+      case 'int32':
+        return 'readInt32';
+      case 'int64':
+        return 'readInt64';
+      case 'uint32':
+        return 'readInt32';
+      case 'uint64':
+        return 'readInt64';
+      case 'sint32':
+        return 'readSInt32';
+      case 'sint64':
+        return 'readSInt64';
+      case 'fixed32':
+        return 'readFixed32';
+      case 'fixed64':
+        return 'readFixed64';
+      case 'sfixed32':
+        return 'readSFixed32';
+      case 'sfixed64':
+        return 'readSFixed64';
+      case 'float':
+        return 'readFloat';
+      case 'double':
+        return 'readDouble';
+      default:
+        throw StateError('Unknown contract type "${type.protoType}"');
+    }
+  }
+
+  /// The method of the reader that reads a repeated value of the type [type].
+  String _protoRepeatedReaderOf(DartType type) {
+    switch (type.protoType) {
+      case 'int32':
+      case 'int64':
+      case 'uint32':
+      case 'uint64':
+        return 'readRepeatedVarint';
+      case 'sint32':
+        return 'readRepeatedSInt32';
+      case 'sint64':
+        return 'readRepeatedSInt64';
+      case 'fixed32':
+      case 'sfixed32':
+        return 'readRepeatedFixed32';
+      case 'fixed64':
+      case 'sfixed64':
+        return 'readRepeatedFixed64';
+      case 'float':
+        return 'readRepeatedFloat';
+      case 'double':
+        return 'readRepeatedDouble';
+      default:
+        throw StateError('Unknown contract type "${type.protoType}"');
+    }
+  }
+
+  /// The default value of the type [type].
+  String _defaultOf(DartType type) {
+    switch (type.dartType) {
+      case 'String':
+        return "''";
+      case 'bool':
+        return 'false';
+      case 'int':
+        return '0';
+      case 'double':
+        return '0.0';
+      case 'List<int>':
+        return 'const <int>[]';
+      default:
+        throw StateError('Unknown contract type "${type.dartType}"');
+    }
+  }
+
+  /// The enum of the type [type].
+  EnumType _enumOf(DartType type) {
+    final enumType = _types.findEnum(type.protoType);
+    if (enumType == null) {
+      throw StateError('Unknown enum "${type.protoType}"');
+    }
+    return enumType;
   }
 
   void _writeFieldParser(_Writer writer, Message message, Field field) {
@@ -493,24 +1000,73 @@ class DartGenerator {
     writer.write('${name}Client({');
     writer.indent();
     writer.write('required this.baseUrl,');
+    writer.write('ServiceTransport? transport,');
     writer.write('http.Client? httpClient,');
     writer.write('Duration timeout = const Duration(seconds: 2),');
     writer.write('Tracer? tracer,');
+    writer.write("String dependencyName = '${service.name}',");
+    writer.write('DependencyPolicy policy = const DependencyPolicy(),');
+    writer.write('Map<String, DependencyPolicy>? policies,');
     writer.dedent();
-    writer.write('})  : _http = httpClient ?? http.Client(),');
+    writer.write('})  : _transport = transport ??');
+    writer.indent();
+    writer.write(
+      'HttpServiceTransport(baseUrl: baseUrl, client: httpClient),',
+    );
+    writer.dedent();
     writer.write('      // ignore: prefer_initializing_formals');
     writer.write('      _timeout = timeout,');
     writer.write('      // ignore: prefer_initializing_formals');
-    writer.write('      _tracer = tracer;');
+    writer.write('      _tracer = tracer,');
+    writer.write('      // ignore: prefer_initializing_formals');
+    writer.write('      _dependencyName = dependencyName,');
+    writer.write('      // ignore: prefer_initializing_formals');
+    writer.write('      _policy = policy,');
+    writer.write('      // ignore: prefer_initializing_formals');
+    writer.write('      _policies = <String, DependencyPolicy>{');
+    writer.write('        ...${name}Policies.policies,');
+    writer.write('        ...?policies,');
+    writer.write('      };');
     writer.blank();
     writer.write('/// Base URL of the service, e.g. `http://localhost:8080`.');
     writer.write('final String baseUrl;');
     writer.blank();
-    writer.write('final http.Client _http;');
+    writer.write('/// The transport the calls go through.');
+    writer.write('final ServiceTransport _transport;');
+    writer.blank();
+    writer.write(
+        '/// The timeout of the calls that have no policy of their own.');
     writer.write('final Duration _timeout;');
     writer.blank();
     writer.write('/// The tracer of the client, when the calls are traced.');
     writer.write('final Tracer? _tracer;');
+    writer.blank();
+    writer.write('/// The name of the dependency the calls go to.');
+    writer.write('final String _dependencyName;');
+    writer.blank();
+    writer.write('/// The policy of the dependency.');
+    writer.write('///');
+    writer.write('/// It holds the circuit breaker and the bulkhead of the');
+    writer.write('/// dependency, which every call of the client shares.');
+    writer.write('final DependencyPolicy _policy;');
+    writer.blank();
+    writer.write('/// The policy of every method, by the name of the method.');
+    writer.write('final Map<String, DependencyPolicy> _policies;');
+    writer.blank();
+    writer.write('/// The dependency the calls go through.');
+    writer.write('///');
+    writer
+        .write('/// The dependency holds the circuit breaker and the bulkhead');
+    writer
+        .write('/// of the service, so every call of the client shares them.');
+    writer.write('late final Dependency _dependency = Dependency(');
+    writer.indent();
+    writer.write('name: _dependencyName,');
+    writer.write('transport: _transport,');
+    writer.write('policy: _policy,');
+    writer.write('tracer: _tracer,');
+    writer.dedent();
+    writer.write(');');
     writer.blank();
 
     for (final method in service.methods) {
@@ -519,8 +1075,93 @@ class DartGenerator {
       }
     }
 
+    _writeClientSend(writer);
     writer.dedent();
     writer.write('}');
+  }
+
+  /// Writes the method that sends the request of a method of the service.
+  void _writeClientSend(_Writer writer) {
+    writer.write('/// Sends the request of a method of the service.');
+    writer.write('///');
+    writer.write(
+        '/// The policy of the method decides how the call is timed out,');
+    writer.write(
+        '/// how often it is retried and whether it may be retried at all.');
+    writer.write('Future<TransportResponse> _send(');
+    writer.indent();
+    writer.write('String method,');
+    writer.write('String operation,');
+    writer.write('String verb,');
+    writer.write('Uri uri,');
+    writer.write('Map<String, String> headers,');
+    writer.write('List<int>? body,');
+    writer.dedent();
+    writer.write(') async {');
+    writer.indent();
+    writer.write('final methodPolicy = _policies[method];');
+    writer.write('final effectivePolicy = methodPolicy == null');
+    writer.indent();
+    writer.write('? DependencyPolicy(timeout: _timeout)');
+    writer.write(': methodPolicy.copyWith(');
+    writer.indent();
+    writer.write('timeout: methodPolicy.timeout ?? _timeout,');
+    writer.dedent();
+    writer.write(');');
+    writer.dedent();
+    writer.write('try {');
+    writer.indent();
+    writer.write('return await _dependency.call(');
+    writer.indent();
+    writer.write('TransportRequest(');
+    writer.indent();
+    writer.write('method: verb,');
+    writer.write('uri: uri,');
+    writer.write('headers: headers,');
+    writer.write('body: body,');
+    writer.write('contentType: body == null');
+    writer.indent();
+    writer.write('? null');
+    writer.write(': _transport.bodyFormat == BodyFormat.protobuf');
+    writer.indent();
+    writer.write('? "application/protobuf"');
+    writer.write(': "application/json",');
+    writer.dedent();
+    writer.dedent();
+    writer.write('),');
+    writer.write('policy: effectivePolicy,');
+    writer.write('operation: operation,');
+    writer.write('attributes: <String, Object?>{');
+    writer.indent();
+    writer.write("'http.request.method': verb,");
+    writer.write("'url.path': uri.path,");
+    writer.dedent();
+    writer.write('},');
+    writer.dedent();
+    writer.write(');');
+    writer.dedent();
+    writer.write('} on DependencyFailure catch (error) {');
+    writer.indent();
+    writer.write(
+      'throw LaskaApiException(error.statusCode ?? 502, error.body);',
+    );
+    writer.dedent();
+    writer.write('} on DependencyTimeoutException catch (error) {');
+    writer.indent();
+    writer.write('throw LaskaApiException(504, error.toString());');
+    writer.dedent();
+    writer.write('} on CircuitOpenException catch (error) {');
+    writer.indent();
+    writer.write('throw LaskaApiException(503, error.toString());');
+    writer.dedent();
+    writer.write('} on BulkheadFullException catch (error) {');
+    writer.indent();
+    writer.write('throw LaskaApiException(503, error.toString());');
+    writer.dedent();
+    writer.write('}');
+    writer.dedent();
+    writer.write('}');
+    writer.blank();
   }
 
   void _writeClientMethod(
@@ -534,11 +1175,13 @@ class DartGenerator {
     final responseType = _types.resolve(_responseField(method));
     final methodName = camelCase(method.name);
     final pathParams = rule.pathParameters;
+    final policy = _policyOf(service, method);
+    final idempotent = policy.idempotent ?? false;
 
     _writeDoc(writer, method.comment, null);
     writer.write(
       'Future<${responseType.dartType}> $methodName'
-      '(${requestType.dartType} request) async {',
+      '(${requestType.dartType} request, {String? idempotencyKey}) async {',
     );
     writer.indent();
 
@@ -575,12 +1218,16 @@ class DartGenerator {
     }
 
     final pathExpression = _pathExpression(rule, pathParams);
+    writer.write('final uri = _transport.buildUri(');
+    writer.indent();
+    writer.write("'$pathExpression',");
+    writer.write("'/${service.fullName}/${method.name}',");
     if (queryFields.isEmpty) {
-      writer.write("final uri = Uri.parse('\$baseUrl$pathExpression');");
+      writer.dedent();
+      writer.write(');');
     } else {
-      writer.write(
-        "final uri = Uri.parse('\$baseUrl$pathExpression').replace(",
-      );
+      writer.dedent();
+      writer.write(').replace(');
       writer.indent();
       writer.write('queryParameters: query.isEmpty ? null : query,');
       writer.dedent();
@@ -589,7 +1236,6 @@ class DartGenerator {
     writer.blank();
 
     final verb = rule.method.toLowerCase();
-    final spanName = '${service.name}.${method.name}';
 
     writer.write('final headers = <String, String>{');
     writer.indent();
@@ -600,79 +1246,77 @@ class DartGenerator {
     writer.dedent();
     writer.write('};');
     writer.blank();
-    writer.write('final tracer = _tracer;');
-    writer.write('final span = tracer?.startSpan(');
-    writer.indent();
-    writer.write("'$spanName',");
-    writer.write('kind: SpanKind.client,');
-    writer.write('attributes: <String, Object?>{');
-    writer.indent();
-    writer.write("'rpc.service': '${service.name}',");
-    writer.write("'rpc.method': '${method.name}',");
-    writer.dedent();
-    writer.write('},');
-    writer.dedent();
-    writer.write(');');
-    writer.blank();
-    writer.write('if (tracer != null && span != null) {');
-    writer.indent();
-    writer.write('tracer.inject(span.context, headers);');
-    writer.dedent();
-    writer.write('}');
-    writer.blank();
-    writer.write('try {');
 
-    writer.write('final response = await _http');
-    writer.indent();
-    if (verb == 'get' || verb == 'delete') {
-      writer.write('.$verb(uri, headers: headers)');
+    if (idempotent) {
+      writer.write('if (idempotencyKey != null) {');
+      writer.indent();
+      writer.write("headers['idempotency-key'] = idempotencyKey;");
+      writer.dedent();
+      writer.write('}');
     } else {
-      final bodyExpression = rule.body == '*'
+      writer.write('final key = idempotencyKey ?? newIdempotencyKey();');
+      writer.write("headers['idempotency-key'] = key;");
+    }
+    writer.blank();
+
+    if (rule.body != null) {
+      final jsonExpression = rule.body == '*'
           ? 'request.toJson()'
           : 'request.${camelCase(rule.body!)}.toJson()';
+      final protoExpression = rule.body == '*'
+          ? 'request.toProtoBytes()'
+          : 'request.${camelCase(rule.body!)}.toProtoBytes()';
       writer.write(
-        '.$verb(uri, headers: headers, body: jsonEncode($bodyExpression))',
+        'final body = _transport.bodyFormat == BodyFormat.protobuf',
       );
+      writer.indent();
+      writer.write('? $protoExpression');
+      writer.write(': utf8.encode(jsonEncode($jsonExpression));');
+      writer.dedent();
+    } else {
+      writer.write('final body = null;');
     }
-    writer.write('.timeout(_timeout);');
-    writer.dedent();
+    writer.blank();
 
-    writer.write('span?.setAttribute(');
+    writer.write('final response = await _send(');
     writer.indent();
-    writer.write("'http.response.status_code',");
-    writer.write('response.statusCode,');
+    writer.write("'${method.name}',");
+    writer.write("'${service.name}.${method.name}',");
+    writer.write("'$verb',");
+    writer.write('uri,');
+    writer.write('headers,');
+    writer.write('body,');
     writer.dedent();
     writer.write(');');
-
-    writer.write('if (response.statusCode >= 400) {');
-    writer.indent();
-    writer.write(
-      'throw LaskaApiException(response.statusCode, response.body);',
-    );
-    writer.dedent();
-    writer.write('}');
+    writer.blank();
 
     if (responseType.isEnum) {
       writer.write(
-        'return ${responseType.enumName}.fromName(jsonDecode(response.body));',
+        'return _transport.bodyFormat == BodyFormat.protobuf',
       );
+      writer.indent();
+      writer.write(
+        '? ${responseType.enumName}.fromNumber(_enumNumber(response.body))',
+      );
+      writer.write(
+        ': ${responseType.enumName}.fromName(jsonDecode(response.text));',
+      );
+      writer.dedent();
     } else {
       writer.write(
-        'return ${responseType.dartType}.fromJson('
-        'jsonDecode(response.body) as Map<String, dynamic>);',
+        'return _transport.bodyFormat == BodyFormat.protobuf',
       );
+      writer.indent();
+      writer.write(
+        '? ${responseType.dartType}.fromProtoBytes(response.body)',
+      );
+      writer.write(
+        ': ${responseType.dartType}.fromJson('
+        'jsonDecode(response.text) as Map<String, dynamic>);',
+      );
+      writer.dedent();
     }
 
-    writer.write('} catch (error, stackTrace) {');
-    writer.indent();
-    writer.write('span?.recordError(error, stackTrace);');
-    writer.write('rethrow;');
-    writer.dedent();
-    writer.write('} finally {');
-    writer.indent();
-    writer.write('span?.end();');
-    writer.dedent();
-    writer.write('}');
     writer.dedent();
     writer.write('}');
     writer.blank();

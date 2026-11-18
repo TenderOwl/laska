@@ -35,6 +35,7 @@ class DartType {
 /// The scalar types of proto3 and their Dart counterparts.
 const Map<String, String> scalarTypes = <String, String>{
   'string': 'String',
+  'bytes': 'List<int>',
   'bool': 'bool',
   'int32': 'int',
   'int64': 'int',

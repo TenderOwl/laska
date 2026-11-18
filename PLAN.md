@@ -4,14 +4,17 @@
 > One contract → typed server stubs + typed clients in any language, observability and
 > resilience built in, one binary to deploy.
 
-**Status (2026-11-17):** Phase 1 (core runtime), Phase 2 (contract pipeline) and Phase 3
-(observability) are implemented. The runtime has a router with parameter constraints and named
-routes, an explicit middleware chain, RFC 9457 error rendering, config + structured logging, a
-graceful shutdown with a worker supervisor, a thin `Db` layer with SQL migrations and a test
-harness that exercises a service in process. The contract pipeline ships with a **pure-Dart
-`.proto` parser** instead of `protoc`, which removes the native toolchain from the critical path
-entirely (§4.3). The observability layer traces a request through the services it touches,
-exports Prometheus metrics and serves the health probes, with one call to install it. See §6 for
+**Status (2026-11-17):** Phase 1 (core runtime), Phase 2 (contract pipeline), Phase 3
+(observability) and Phase 4 (inter-service calls and resilience) are implemented. The runtime has a
+router with parameter constraints and named routes, an explicit middleware chain, RFC 9457 error
+rendering, config + structured logging, a graceful shutdown with a worker supervisor, a thin `Db`
+layer with SQL migrations and a test harness that exercises a service in process. The contract
+pipeline ships with a **pure-Dart `.proto` parser** instead of `protoc`, which removes the native
+toolchain from the critical path entirely (§4.3). The observability layer traces a request through
+the services it touches, exports Prometheus metrics and serves the health probes, with one call to
+install it. The resilience layer gives every outgoing call a timeout, a retry with jitter, a circuit
+breaker, a bulkhead and an idempotency key — and the policy of the call is written **in the
+contract**, so the way a service is called is visible to everyone who reads it (§4.12). See §6 for
 what is done and what is left.
 
 ---
@@ -108,10 +111,12 @@ SQL migrations · auth (JWT / session / API key) · rate limiting · CLI · test
 **Test coverage then:** the router only. Nothing exercised the server, the middleware chain,
 error paths, or the isolate model.
 
-**Test coverage now:** 247 tests across five packages — the router, the dispatcher, the middleware
+**Test coverage now:** 317 tests across five packages — the router, the dispatcher, the middleware
 chain, the config and the logger, the server and its graceful drain, the supervisor with real
 worker processes, the database layer and the migration runner, the tracing and the metrics, the
-OpenTelemetry adapter, the health probes, the test harness and the CLI.
+OpenTelemetry adapter, the health probes, the resilience core (the retry, the breaker, the
+bulkhead, the idempotency, the discovery and the outbox), the protobuf codec, the HTTP and the
+gRPC transports, the test harness and the CLI.
 
 ---
 
@@ -233,16 +238,20 @@ From this single file Laska produces:
 | Server interface + typed handler signatures | the service author | done |
 | Route table (REST, from `google.api.http`) | HTTP clients, gateways, browsers | done |
 | Typed Dart client (timeouts, error mapping) | the service author and other services | done |
+| Typed Dart client with the policy of the contract (timeout, retry, idempotency) | the service author and other services | done |
 | OpenAPI 3.1 document | docs, client generators, gateway | done |
 | Breaking-change report (`laska contract diff`) | CI | done |
-| gRPC service descriptor + client stub | other services | planned |
+| Binary protobuf codec (pure Dart) | wire compatibility with other languages | done |
+| gRPC client transport for the same contract | other services | done |
+| gRPC service descriptor + server stub | other services | planned |
 | PHP/Python/Go/TS client SDKs | consumers in other languages | planned |
-| Binary protobuf codec | wire compatibility with other languages | planned |
 
 **Wire format of the slice:** the generated messages follow the protobuf JSON mapping
 (field names in lowerCamelCase, enums by their proto name), and the REST projection speaks
-JSON. The binary protobuf codec and the gRPC transport are Phase 4 work — the contract
-model, the generator and the diff already carry everything they need.
+JSON. The binary protobuf codec and the gRPC client transport are Phase 4 work — they are done:
+every message has `toProtoBytes()`/`fromProtoBytes()`, and the same generated client talks HTTP
+with JSON or gRPC with protobuf, chosen by the transport it is given. The gRPC *server* side and
+the foreign-language SDKs are what is left.
 
 
 **Why protobuf and not OpenAPI-first:** protobuf is the only contract format with a mature
@@ -277,10 +286,10 @@ SDK.
 tax the framework promises to remove. A hand-written parser is more work up front and
 strictly less friction afterwards.
 
-**Still to come:** `bytes` fields, `oneof`, `map`, nested types, well-known types, proto2
-syntax, and `optional` semantics beyond presence tracking. When the subset outgrows the
-parser, `protoc` stays available as a cross-check in CI — the generated model is the same
-either way.
+**Still to come:** `oneof`, `map`, nested types, well-known types, proto2 syntax, and `optional`
+semantics beyond presence tracking. (`bytes` fields are supported since Phase 4.) When the subset
+outgrows the parser, `protoc` stays available as a cross-check in CI — the generated model is the
+same either way.
 
 
 ### 4.4 Code generation — what Laska generates vs. what the user writes
@@ -447,6 +456,37 @@ consistent, configurable set rather than as a pile of third-party packages.
   discovery is a later plug, not a v1 dependency.
 - **Error mapping**: gRPC status ↔ HTTP status ↔ `ProblemDetail` in one place.
 
+**Implemented (Phase 4).** The whole set lives in `laska_core/src/resilience/` and is applied by
+the generated client without a line of user code:
+
+- `DependencyPolicy` holds the timeout, the retry, the circuit breaker, the bulkhead and the
+  idempotency of a call. `Dependency` is the one place where they meet: it runs the bulkhead, the
+  breaker, the per-attempt timeout and the retry loop, and it traces the call as one client span
+  with the number of the attempts.
+- **The policy is in the contract.** A service declares how it wants to be called with
+  `option (laska.policy) = { timeout_ms, max_attempts, backoff_ms, max_backoff_ms, jitter,
+  idempotent }`, on the service or on a single method. The generator turns it into a
+  `<Service>Policies` class, so the retry policy is visible in the contract instead of in the
+  configuration of the caller.
+- **Retries only for idempotent calls.** A call that changes something is never repeated, whatever
+  the retry policy says; the generated client adds an `idempotency-key` header to it.
+- **The breaker counts the attempts**, not the calls: a dependency that fails three times in a row
+  opens the circuit, and the calls that follow fail fast with `503` instead of piling up. The
+  timeout of the dependency is what turns the failure into an answer; a caller that waits for a
+  timeout instead of a breaker gets a pile-up.
+- **The same contract over two transports**: `HttpServiceTransport` speaks JSON over the REST
+  projection, `GrpcServiceTransport` speaks the binary protobuf over the RPC path. The generated
+  client works with both, and `TestTransport` (in `laska_test`) lets a test exercise it without a
+  network.
+- **One error taxonomy**: `DependencyFailure`, `DependencyTimeoutException`, `CircuitOpenException`
+  and `BulkheadFullException` map to one HTTP status (`httpStatusOfError`) and one gRPC status, so
+  a service degrades the same way whatever transport the dependency speaks.
+- **The outbox** writes the event and the business row in one transaction; the dispatcher publishes
+  the pending events and marks them sent — at-least-once delivery without a distributed
+  transaction.
+- **Static discovery**: `LASKA_SERVICES="users=http://localhost:8080"` or `USERS_URL` resolves the
+  address of a dependency; an unknown service is an error, not a silent default.
+
 ### 4.13 Data access — SQL stays yours
 
 Microservices own their schema. A framework-level ORM with relations, eager loading and a
@@ -494,6 +534,11 @@ and gains an ORM-independent schema, no codegen step, and no framework lock-in o
 - Telemetry: the `Tracer` abstraction with the OpenTelemetry implementation, the `Meter` with a
   Prometheus exposition, `TracingDatabase`, the tracing and the metrics middleware, the health
   probes and `Observability.install(app)`.
+- Resilience: `DependencyPolicy`, `Dependency`, `CircuitBreaker`, `Bulkhead`, the idempotency
+  store and its middleware, the static `ServiceDiscovery`, the `Outbox` and its dispatcher, and
+  the error taxonomy with the HTTP ↔ gRPC status mapping.
+- Transports: `ServiceTransport` with the HTTP (JSON) and the gRPC (protobuf) implementations,
+  the pure-Dart protobuf codec (`ProtoWriter`/`ProtoReader`) and the `Request.idempotencyKey`.
 
 *Planned:*
 
@@ -551,6 +596,9 @@ command is reported and exits with the code `64`.
 - `openTestDatabase()` — an in-memory SQLite database for fast unit tests.
 - `withTestDatabase(database, body)` — the body runs in a transaction that is rolled back
   afterwards, so a test never leaves data behind.
+- `TestTransport` — a transport that answers from the test: it records the requests and returns
+  the answers the test prepared, so a generated client can be exercised (retries, breaker,
+  bulkhead) without a network.
 
 *Planned:*
 
@@ -609,10 +657,10 @@ as specified, with tests — **done**. The behaviour is pinned by 102 tests in
 - [x] Generated code formatted with `package:dart_style` (also a syntax check).
 - [x] Drift check: the example fails if the checked-in generated code is out of date.
 - [ ] Foreign-language client generation (`--lang=go` first, then PHP/Python/TS).
-- [ ] Binary protobuf codec and the gRPC transport.
+- [x] Binary protobuf codec and the gRPC transport (client side — done in Phase 4).
 
 **Done when:** one `.proto` produces a working REST endpoint, a Dart client, an OpenAPI
-document and a CI check that fails on a breaking change — **done**; the gRPC transport and
+document and a CI check that fails on a breaking change — **done**; the gRPC server stub and
 the foreign-language SDKs are what is left.
 
 
@@ -637,16 +685,22 @@ integration test `example/contract_slice/test/observability_test.dart`: the clie
 server span of a call share the trace id, because the generated client writes the `traceparent`
 header and the server continues that trace.
 
-### Phase 4 — Inter-service & resilience (12–16 days)
+### Phase 4 — Inter-service & resilience (12–16 days) — **done**
 
-- [ ] Generated client with per-method timeout/retry defaults.
-- [ ] Retry with backoff + jitter, idempotency-key propagation.
-- [ ] Circuit breaker, bulkhead, graceful degradation.
-- [ ] Outbox helper (transactional publish).
-- [ ] Service discovery via static config; gRPC + HTTP transports for the same contract.
+- [x] Generated client with per-method timeout/retry defaults.
+- [x] Retry with backoff + jitter, idempotency-key propagation.
+- [x] Circuit breaker, bulkhead, graceful degradation.
+- [x] Outbox helper (transactional publish).
+- [x] Service discovery via static config; gRPC + HTTP transports for the same contract.
 
 **Done when:** a dependency failure produces a circuit-open response in 5 seconds instead of a
-pile-up, and the retry policy is visible in the contract.
+pile-up, and the retry policy is visible in the contract — **done**. The first half is pinned by
+`example/contract_slice/test/client_resilience_test.dart`: the dependency answers `503`, the
+breaker opens after the attempts of the first call, and the next call is answered with `503` in
+under a second instead of waiting for the timeout — the whole scenario stays below the 5 seconds of
+the gate. The second half is pinned by the contract itself: `option (laska.policy)` declares the
+timeout, the number of the attempts, the backoff, the jitter and the idempotency, and the
+generator turns it into the `<Service>Policies` class the client uses.
 
 ### Phase 5 — Workspace & CLI maturity (10–14 days)
 
@@ -718,7 +772,8 @@ Resolve during the relevant phase, not now:
 - Whether contract codegen runs via `build_runner` or a standalone `laska contract generate` —
   Phase 2 start.
 - `Tracer` implementation if `dartastic_opentelemetry` changes ownership — Phase 3.
-- Broker choice for the queue backend (Postgres `SKIP LOCKED` vs NATS vs Redis Streams) — Phase 4.
+- Broker choice for the queue backend (Postgres `SKIP LOCKED` vs NATS vs Redis Streams) — the
+  transactional outbox landed in Phase 4; the broker itself is still open.
 - Language priority for foreign client SDKs (Go first, then PHP/Python/TS) — Phase 2.
 - Whether `laska` ships a VS Code extension / language server — after v1.0.
 - Whether the umbrella package `laska` is published to pub.dev or stays a workspace root — before
@@ -728,23 +783,22 @@ Resolve during the relevant phase, not now:
 
 ## 10. Immediate next steps
 
-Phase 1 (core runtime), Phase 2 (contract pipeline) and Phase 3 (observability) are implemented.
-The next phase is Phase 4 — inter-service calls and resilience — because the telemetry layer now
-measures the latency of the dependencies, so the timeouts and the retries show up in the traces.
+Phase 1 (core runtime), Phase 2 (contract pipeline), Phase 3 (observability) and Phase 4
+(inter-service calls and resilience) are implemented. The next phase is Phase 5 — the workspace
+and the CLI maturity — because a service can now be written, called, traced and made resilient,
+but a team still has to assemble the workspace by hand.
 
-1. **Typed clients with per-method defaults** — the generated client already carries the tracer
-   and the timeout; it needs the retry policy and the circuit breaker of the contract.
-2. **Retry with backoff and jitter**, only for the idempotent methods, honouring `Retry-After`.
-3. **Circuit breaker and bulkhead** — a per-dependency concurrency limit, so one slow dependency
-   cannot exhaust the process.
-4. **Idempotency keys** — propagated end to end and honoured by the handler.
-5. **Foreign-language client generation** (`--lang=go` first) — it closes the loop with the
-   polyglot audience that the whole positioning rests on.
-6. **`laska.yaml` beyond the service list** — the workspace manifest grows the commands, the
-   environment and the dependencies of the workspace (Phase 5).
+1. **`laska.yaml` workspace manifest** — the services, the environment, the dependencies between
+   them and the commands of the workspace, so `laska dev` starts a whole system with one command.
+2. **`laska new service`** — scaffolding a service from a contract template: the contract, the
+   generated code, the service skeleton, the tests and the Dockerfile.
+3. **Foreign-language client generation** (`--lang=go` first) — it closes the loop with the
+   polyglot audience that the whole positioning rests on, and the binary protobuf codec of
+   Phase 4 is what makes it possible.
+4. **Deployment artefacts** — a Dockerfile and a Kubernetes manifest generated from the manifest.
+5. **CI recipes** — `analyze`, `test`, `contract diff` and `contract lint` as one command.
 
-Deferred to Phase 5+: the deployment artefacts, the documentation site and the release
-hardening.
+Deferred to Phase 6: the release hardening, the auth work and the performance pass.
 
 ---
 

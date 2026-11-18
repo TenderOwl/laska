@@ -223,6 +223,7 @@ class Service {
     required this.methods,
     this.comment,
     this.package = '',
+    this.policy,
   });
 
   /// Simple name of the service.
@@ -237,8 +238,75 @@ class Service {
   /// Protobuf package the service belongs to.
   final String package;
 
+  /// The policy of the service, applied to every method that has none.
+  ///
+  /// It comes from the `laska.policy` annotation of the service.
+  final MethodPolicy? policy;
+
   /// Fully qualified name of the service.
   String get fullName => package.isEmpty ? name : '$package.$name';
+}
+
+/// The policy of a method, as it is written in the contract.
+///
+/// The policy is what makes the resilience of a call visible in the contract
+/// instead of hidden in the code of the caller: the timeout, the retry and the
+/// idempotency of a method are declared next to its signature.
+class MethodPolicy {
+  /// Creates a policy.
+  MethodPolicy({
+    this.timeout,
+    this.maxAttempts,
+    this.backoff,
+    this.maxBackoff,
+    this.jitter,
+    this.idempotent,
+  });
+
+  /// How long one attempt of the call may take.
+  final Duration? timeout;
+
+  /// How many times the call is made in total.
+  final int? maxAttempts;
+
+  /// The backoff before the second attempt.
+  final Duration? backoff;
+
+  /// The longest wait between two attempts.
+  final Duration? maxBackoff;
+
+  /// Whether the wait between two attempts is randomised.
+  final bool? jitter;
+
+  /// Whether the call may be repeated.
+  final bool? idempotent;
+
+  /// A copy of this policy with the fields of [other] on top of it.
+  ///
+  /// The fields of [other] win, so the policy of a method wins over the policy
+  /// of the service.
+  MethodPolicy merge(MethodPolicy? other) {
+    if (other == null) {
+      return this;
+    }
+    return MethodPolicy(
+      timeout: other.timeout ?? timeout,
+      maxAttempts: other.maxAttempts ?? maxAttempts,
+      backoff: other.backoff ?? backoff,
+      maxBackoff: other.maxBackoff ?? maxBackoff,
+      jitter: other.jitter ?? jitter,
+      idempotent: other.idempotent ?? idempotent,
+    );
+  }
+
+  /// Whether the policy holds nothing.
+  bool get isEmpty =>
+      timeout == null &&
+      maxAttempts == null &&
+      backoff == null &&
+      maxBackoff == null &&
+      jitter == null &&
+      idempotent == null;
 }
 
 /// A single RPC of a service.
@@ -250,6 +318,7 @@ class Method {
     required this.responseType,
     this.httpRules = const <HttpRule>[],
     this.comment,
+    this.policy,
   });
 
   /// Proto name of the method, e.g. `GetUser`.
@@ -266,6 +335,11 @@ class Method {
 
   /// Leading documentation comment, if any.
   final String? comment;
+
+  /// The policy of the method, when it declares one.
+  ///
+  /// It comes from the `laska.policy` annotation of the method.
+  final MethodPolicy? policy;
 }
 
 /// An HTTP binding of a method.

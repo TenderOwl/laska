@@ -152,6 +152,7 @@ class ProtoParser {
         case 'reserved':
           _skipToSemicolon();
         case 'option':
+          _takeDoc();
           _skipOption();
         default:
           fields.add(_parseField());
@@ -225,6 +226,7 @@ class ProtoParser {
 
       final word = _peekIdent() ?? '';
       if (word == 'option') {
+        _takeDoc();
         _skipOption();
         continue;
       }
@@ -266,6 +268,7 @@ class ProtoParser {
     _expectChar('{');
 
     final methods = <Method>[];
+    MethodPolicy? servicePolicy;
     while (true) {
       _skipTrivia();
       if (_pos >= source.length) {
@@ -282,7 +285,16 @@ class ProtoParser {
 
       final word = _peekIdent() ?? '';
       if (word == 'option') {
-        _skipOption();
+        _takeDoc();
+        _expectIdent('option');
+        final optionName = _readOptionName();
+        _expectChar('=');
+        if (optionName == '(laska.policy)') {
+          servicePolicy = _parsePolicy();
+        } else {
+          _skipOptionValue();
+        }
+        _expectChar(';');
         continue;
       }
       if (word != 'rpc') {
@@ -296,6 +308,7 @@ class ProtoParser {
       methods: methods,
       comment: doc,
       package: package,
+      policy: servicePolicy,
     );
   }
 
@@ -314,6 +327,7 @@ class ProtoParser {
     _expectChar(')');
 
     final rules = <HttpRule>[];
+    MethodPolicy? policy;
     _skipTrivia();
     if (_pos < source.length && source[_pos] == '{') {
       _pos++;
@@ -338,6 +352,8 @@ class ProtoParser {
         _expectChar('=');
         if (optionName == '(google.api.http)') {
           rules.addAll(_parseHttpRules());
+        } else if (optionName == '(laska.policy)') {
+          policy = _parsePolicy();
         } else {
           _skipOptionValue();
         }
@@ -353,7 +369,116 @@ class ProtoParser {
       responseType: responseType,
       httpRules: rules,
       comment: doc,
+      policy: policy,
     );
+  }
+
+  /// Parses the `laska.policy` annotation of a method or of a service.
+  ///
+  /// The annotation holds the keys of the policy of the call:
+  ///
+  /// ```
+  /// option (laska.policy) = {
+  ///   timeout_ms: 2000
+  ///   max_attempts: 3
+  ///   backoff_ms: 100
+  ///   max_backoff_ms: 2000
+  ///   jitter: true
+  ///   idempotent: true
+  /// };
+  /// ```
+  MethodPolicy _parsePolicy() {
+    _expectChar('{');
+    Duration? timeout;
+    int? maxAttempts;
+    Duration? backoff;
+    Duration? maxBackoff;
+    bool? jitter;
+    bool? idempotent;
+
+    while (true) {
+      _skipTrivia();
+      if (_pos >= source.length) {
+        throw _error('Unterminated laska.policy annotation');
+      }
+      if (source[_pos] == '}') {
+        _pos++;
+        break;
+      }
+      if (source[_pos] == ';') {
+        _pos++;
+        continue;
+      }
+
+      final key = _readIdent();
+      _expectChar(':');
+      final value = _readPolicyValue();
+
+      switch (key) {
+        case 'timeout_ms':
+          timeout = Duration(milliseconds: _asInt(value, key));
+        case 'max_attempts':
+          maxAttempts = _asInt(value, key);
+        case 'backoff_ms':
+          backoff = Duration(milliseconds: _asInt(value, key));
+        case 'max_backoff_ms':
+          maxBackoff = Duration(milliseconds: _asInt(value, key));
+        case 'jitter':
+          jitter = _asBool(value, key);
+        case 'idempotent':
+          idempotent = _asBool(value, key);
+        default:
+          throw _error('Unknown key "$key" in the laska.policy annotation');
+      }
+      _skipOptionalComma();
+    }
+
+    return MethodPolicy(
+      timeout: timeout,
+      maxAttempts: maxAttempts,
+      backoff: backoff,
+      maxBackoff: maxBackoff,
+      jitter: jitter,
+      idempotent: idempotent,
+    );
+  }
+
+  /// Reads the value of a key of the `laska.policy` annotation.
+  Object _readPolicyValue() {
+    _skipTrivia();
+    if (_pos >= source.length) {
+      throw _error('Expected a value in the laska.policy annotation');
+    }
+
+    final char = source[_pos];
+    if (char == '-' || _isDigit(char)) {
+      return _readInt();
+    }
+
+    final word = _readIdent();
+    if (word == 'true') {
+      return true;
+    }
+    if (word == 'false') {
+      return false;
+    }
+    return word;
+  }
+
+  int _asInt(Object value, String key) {
+    if (value is int) {
+      return value;
+    }
+    throw _error(
+        'The key "$key" of the laska.policy annotation needs a number');
+  }
+
+  bool _asBool(Object value, String key) {
+    if (value is bool) {
+      return value;
+    }
+    throw _error('The key "$key" of the laska.policy annotation needs true or '
+        'false');
   }
 
   List<HttpRule> _parseHttpRules() {
