@@ -756,6 +756,20 @@ repository (`dart format .` and `dart run tool/check.dart`):
 The guides of the phase live in `docs/`: `auth.md`, `versioning.md`, `upgrading.md`,
 `compatibility.md` and `performance.md`.
 
+### The distribution of v0.1.0
+
+The tag `v0.1.0` runs `.github/workflows/release.yml`: the bundle of the command
+line interface is built for Linux, macOS and Windows, on x64 and on arm64, and the
+archives are attached to the release of the repository with their checksums. The
+release `v0.1.0` is published, and the installers `tool/install.sh` and
+`tool/install.ps1` fetch the bundle of the platform and check its checksum before
+they unpack it.
+
+The packages of the workspace are published on pub.dev by the workflow
+`.github/workflows/publish.yml`, which is started by hand and reads the token of
+the publisher from the secret `PUB_TOKEN` of the repository. The names of the four
+packages are free, and the publication waits for that token.
+
 ### Totals
 
 | Milestone | Scope | Effort |
