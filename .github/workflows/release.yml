@@ -74,7 +74,7 @@ jobs:
         run: |
           cd packages/laska_cli/build/cli/bundle
           if [ "${{ runner.os }}" = "Windows" ]; then
-            powershell -Compress-Archive -Path bin,lib -DestinationPath "laska-${{ matrix.target }}.zip"
+            powershell -NoProfile -Command "Compress-Archive -Path 'bin','lib' -DestinationPath 'laska-${{ matrix.target }}.zip' -Force"
           else
             zip -r "laska-${{ matrix.target }}.zip" bin lib
           fi

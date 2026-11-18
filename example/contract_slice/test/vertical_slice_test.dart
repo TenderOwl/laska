@@ -125,10 +125,15 @@ void main() {
       final checkedIn = File('lib/generated/users.pb.dart').readAsStringSync();
 
       expect(
-        checkedIn,
-        generated,
+        _withUnixLineFeeds(checkedIn),
+        _withUnixLineFeeds(generated),
         reason: 'Run "laska contract compile" to update the generated code.',
       );
     });
   });
 }
+
+/// The line feeds of the file are not part of the code that the compiler
+/// writes: a checkout of the repository on Windows can bring the carriage
+/// returns along, and the comparison must not depend on them.
+String _withUnixLineFeeds(String code) => code.replaceAll('\r\n', '\n');

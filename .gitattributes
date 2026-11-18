@@ -1,0 +1,17 @@
+# The sources of the project are stored with the line feeds of Unix and are
+# checked out the same way on every platform. Without this rule the checkout
+# on Windows rewrites the files with CRLF, and the generated code of the
+# contract stops matching the checked in code byte for byte.
+* text=auto eol=lf
+
+# The files that are not text.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
