@@ -94,6 +94,14 @@ The tag runs `.github/workflows/release.yml`, which:
    the secret `PUB_TOKEN` holds the token of the publisher. Without the secret
    the packages are not published and the binaries are built all the same.
 
+The publishing on pub.dev can also be run on its own, without a tag, from
+`.github/workflows/publish.yml`: the publishing cannot be undone, and the
+packages are often published after the release is out.
+
+```console
+$ gh workflow run publish.yml
+```
+
 The packages are published in the order of their dependencies, and the
 version of the tag has to be the version of the packages. The script that
 publishes them is `tool/publish.dart`:
