@@ -13,13 +13,14 @@ ship it as a single binary.
 - **DX**: `laska new service`, `laska dev` for a whole multi-service workspace, `laska contract
   diff`, `laska migrate:run`.
 
-The long-term design and the roadmap behind these points live in [PLAN.md](PLAN.md).
+The long-term design and the roadmap behind these points live in [PLAN.md](PLAN.md), and the guides
+live in [docs/](docs/README.md).
 
 ## Current state
 
 Active development, **not for production use**. The core runtime, the contract pipeline, the
-observability layer and the resilience layer are implemented and working end to end (see below); the
-multi-service workspace and the foreign-language SDKs are still to come.
+observability layer, the resilience layer and the workspace tooling are implemented and working end
+to end (see below); the foreign-language SDKs and the release hardening are still to come.
 
 | Package | What it holds |
 |---|---|
@@ -244,11 +245,15 @@ and the event in one transaction and publishes them afterwards, and the discover
 address of a dependency from `LASKA_SERVICES` or `<NAME>_URL`.
 
 ### The workspace runner
+
 `laska dev` starts every service of the workspace, aggregates their logs in one stream and points
 them at a local collector that prints the traces it receives:
 
 ```yaml
 # laska.yaml
+environment:
+  LOG_LEVEL: debug
+
 services:
   - name: users
     entrypoint: services/users/bin/server.dart
@@ -256,6 +261,9 @@ services:
   - name: orders
     entrypoint: services/orders/bin/server.dart
     port: 8081
+    depends_on: [users]
+    environment:
+      DATABASE_URL: postgres://localhost/orders
 ```
 
 ```console
@@ -268,20 +276,41 @@ $ dart run laska_cli:laska dev
 collector: trace 4bf92f35 span 00f067aa http.server 12.4ms
 ```
 
+The services are started in the order of their `depends_on`, and a service waits for the services it
+depends on to answer before it is started (`--startup-timeout` says how long it waits). Every
+service gets the address of the other services in its environment — `USERS_URL`, `ORDERS_URL` —
+which is exactly what the service discovery of the runtime reads:
+
+```dart
+final discovery = ServiceDiscovery.fromEnvironment();
+final users = discovery.resolve('users'); // http://127.0.0.1:8080
+```
+
 ## The command line interface
 
 ```
+laska new <name>          # scaffold a workspace with a first service
+laska new service <name>  # scaffold a service inside a workspace
 laska contract compile   --proto <dir> --out <dir> [--title <t>] [--version <v>]
 laska contract diff      --base <dir> --candidate <dir> [--quiet]
+laska contract lint      --proto <dir>
 laska serve              [--entrypoint <file>] [--workers <n>] [--address <addr>] [--port <port>]
 laska dev                [--manifest <file>] [--entrypoint <file>] [--collector-port <port>]
 laska route:list         [--entrypoint <file>]
 laska migrate:run        [--entrypoint <file>] [--directory <dir>]
+laska deploy:dockerfile  [--manifest <file>] [--out <dir>] [--image <repo>]
+laska deploy:k8s         [--manifest <file>] [--out <dir>] [--namespace <ns>]
+laska ci:recipe          [--out <file>] [--proto <dir>] [--base <dir>] [--candidate <dir>]
 ```
 
 `laska serve` runs the supervisor: it starts the worker processes of the service, shares the port
 between them, restarts the ones that crash and stops them all on a signal. `laska route:list`
 prints the route table of the service, and `laska migrate:run` applies the pending SQL migrations.
+
+`laska new service` writes a service that runs: the contract, the generated code, the
+implementation, the entrypoint and a test, and it adds the service to the manifest of the
+workspace. `laska deploy:dockerfile` and `laska deploy:k8s` write the images and the manifests of
+the cluster from that manifest, and `laska ci:recipe` writes the workflow of the pipeline.
 
 Every command has a help of its own. `laska --help` lists the commands, the global options and the
 environment variables of the telemetry, and `laska help <command>` describes one command with its

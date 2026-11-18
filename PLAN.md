@@ -5,7 +5,8 @@
 > resilience built in, one binary to deploy.
 
 **Status (2026-11-17):** Phase 1 (core runtime), Phase 2 (contract pipeline), Phase 3
-(observability) and Phase 4 (inter-service calls and resilience) are implemented. The runtime has a
+(observability), Phase 4 (inter-service calls and resilience) and Phase 5 (workspace and CLI
+maturity) are implemented. The runtime has a
 router with parameter constraints and named routes, an explicit middleware chain, RFC 9457 error
 rendering, config + structured logging, a graceful shutdown with a worker supervisor, a thin `Db`
 layer with SQL migrations and a test harness that exercises a service in process. The contract
@@ -14,7 +15,9 @@ toolchain from the critical path entirely (§4.3). The observability layer trace
 the services it touches, exports Prometheus metrics and serves the health probes, with one call to
 install it. The resilience layer gives every outgoing call a timeout, a retry with jitter, a circuit
 breaker, a bulkhead and an idempotency key — and the policy of the call is written **in the
-contract**, so the way a service is called is visible to everyone who reads it (§4.12). See §6 for
+contract**, so the way a service is called is visible to everyone who reads it (§4.12). The
+workspace layer scaffolds a service from a contract, runs a whole workspace with one command and
+writes the images, the manifests and the recipe of the pipeline (§5.5). See §6 for
 what is done and what is left.
 
 ---
@@ -111,12 +114,12 @@ SQL migrations · auth (JWT / session / API key) · rate limiting · CLI · test
 **Test coverage then:** the router only. Nothing exercised the server, the middleware chain,
 error paths, or the isolate model.
 
-**Test coverage now:** 317 tests across five packages — the router, the dispatcher, the middleware
+**Test coverage now:** 380 tests across five packages — the router, the dispatcher, the middleware
 chain, the config and the logger, the server and its graceful drain, the supervisor with real
 worker processes, the database layer and the migration runner, the tracing and the metrics, the
 OpenTelemetry adapter, the health probes, the resilience core (the retry, the breaker, the
 bulkhead, the idempotency, the discovery and the outbox), the protobuf codec, the HTTP and the
-gRPC transports, the test harness and the CLI.
+gRPC transports, the contract linter, the scaffolder, the test harness and the CLI.
 
 ---
 
@@ -156,7 +159,7 @@ laska/                    # the umbrella package — what apps depend on
 │   └── laska_test/        # test harness: in-process client, expectations, database helpers
 ├── example/
 │   └── contract_slice/    # the vertical slice: contract → generated code → service → client
-├── docs/
+├── docs/                  # the guides: getting started, contracts, observability, resilience, deployment
 └── tool/                  # repo-level checks
 ```
 
@@ -554,32 +557,39 @@ and gains an ORM-independent schema, no codegen step, and no framework lock-in o
   (`--lang=go`, `--lang=php`, `--lang=python`, `--lang=ts`).
 - OpenAPI 3.1 export from the same contract, served at `/api-docs` in dev and exportable as a
   static file in CI.
-- `laska contract diff` — breaking-change detection with Buf-compatible semantics.
-- `laska contract lint` — naming, field-naming and package-layout rules, in CI.
+- `laska contract diff` — breaking-change detection with Buf-compatible semantics. [done]
+- `laska contract lint` — naming, field-naming and package-layout rules, in CI. [done]
 
 ### 5.3 `laska_cli`
 
 ```
-laska new <name>          # scaffold a project
-laska new service <name>  # scaffold a service inside a workspace
+laska new <name>          # scaffold a project                               [done]
+laska new service <name>  # scaffold a service inside a workspace             [done]
 laska serve [--workers=N] # run the HTTP server (supervisor)          [done]
 laska dev                 # run all services of a workspace + local infra + aggregated logs
 laska contract compile    # compile contracts, generate code         [done]
 laska contract generate --lang=go
 laska contract diff --base <dir> --candidate <dir>                   [done]
-laska contract lint
+laska contract lint --proto <dir>                                     [done]
 laska route:list          # dump the route table                      [done]
 laska migrate:make <name> # scaffold a SQL migration
 laska migrate:run|status|rollback                                     [run done]
 laska db:seed
 laska build               # AOT compile
-laska dockerfile|k8s      # deployment artifacts
+laska deploy:dockerfile   # the images of the services of the workspace     [done]
+laska deploy:k8s          # the manifests of the services of the workspace  [done]
+laska ci:recipe           # the recipe of the continuous integration        [done]
 ```
 
 Built on `package:args`. `laska serve` is the supervisor described in §4.1. `laska dev` is the
 single most valuable command for the target audience: it starts every service in the workspace,
 wires them to a local Postgres/Redis (via a generated compose file), aggregates their logs, and
 shows live traces — the "one command instead of five tools" promise in practice.
+
+`laska new` writes a service that runs: the contract, the generated code, the implementation, the
+entrypoint and a test, and it adds the service to the manifest of the workspace. `laska deploy:*`
+writes the images and the manifests of the cluster from that manifest, and `laska ci:recipe` writes
+the workflow of the pipeline, so the artefacts of a project are never written by hand.
 
 Every command has a help: `laska --help` lists the commands, the global options and the
 environment variables of the telemetry, `laska help <command>` describes one command with its
@@ -702,15 +712,23 @@ the gate. The second half is pinned by the contract itself: `option (laska.polic
 timeout, the number of the attempts, the backoff, the jitter and the idempotency, and the
 generator turns it into the `<Service>Policies` class the client uses.
 
-### Phase 5 — Workspace & CLI maturity (10–14 days)
+### Phase 5 — Workspace & CLI maturity (10–14 days) — **done**
 
-- [ ] `laska.yaml` workspace manifest, multi-service `laska dev`.
-- [ ] `laska new service`, scaffolding from a contract template.
-- [ ] Dockerfile + Kubernetes manifest generation.
-- [ ] CI recipes: `analyze`, `test`, `contract diff`, `contract lint`.
-- [ ] Docs: getting started, contracts, observability, resilience, deployment.
+- [x] `laska.yaml` workspace manifest, multi-service `laska dev`.
+- [x] `laska new service`, scaffolding from a contract template.
+- [x] Dockerfile + Kubernetes manifest generation.
+- [x] CI recipes: `analyze`, `test`, `contract diff`, `contract lint`.
+- [x] Docs: getting started, contracts, observability, resilience, deployment.
 
-**Done when:** a two-service workspace runs from `laska dev` on a fresh machine with one command.
+**Done when:** a two-service workspace runs from `laska dev` on a fresh machine with one command —
+**done**. The manifest holds the services, the environment and the dependencies between them;
+`laska dev` starts the services in the order of their dependencies, waits for a dependency to
+answer before it starts the service that needs it, and gives every service the address of the
+other ones (`USERS_URL`), which is what the discovery of the runtime reads. The services come from
+`laska new service`, which writes the contract, the generated code, the implementation, the
+entrypoint and a test — a scaffolded service passes `dart analyze` and `dart test` as it is. The
+images, the Kubernetes manifests and the recipe of the pipeline are written from the same
+manifest. The documentation lives in `docs/`.
 
 ### Phase 6 — Release hardening (8–12 days) → **v1.0**
 
@@ -783,22 +801,23 @@ Resolve during the relevant phase, not now:
 
 ## 10. Immediate next steps
 
-Phase 1 (core runtime), Phase 2 (contract pipeline), Phase 3 (observability) and Phase 4
-(inter-service calls and resilience) are implemented. The next phase is Phase 5 — the workspace
-and the CLI maturity — because a service can now be written, called, traced and made resilient,
-but a team still has to assemble the workspace by hand.
+Phase 1 (core runtime), Phase 2 (contract pipeline), Phase 3 (observability), Phase 4
+(inter-service calls and resilience) and Phase 5 (workspace and CLI maturity) are implemented. The
+next phase is Phase 6 — the release hardening — because the framework now covers the whole path
+from the contract to the running service, and the remaining gaps are the ones a v1.0 cannot have.
 
-1. **`laska.yaml` workspace manifest** — the services, the environment, the dependencies between
-   them and the commands of the workspace, so `laska dev` starts a whole system with one command.
-2. **`laska new service`** — scaffolding a service from a contract template: the contract, the
-   generated code, the service skeleton, the tests and the Dockerfile.
-3. **Foreign-language client generation** (`--lang=go` first) — it closes the loop with the
-   polyglot audience that the whole positioning rests on, and the binary protobuf codec of
-   Phase 4 is what makes it possible.
-4. **Deployment artefacts** — a Dockerfile and a Kubernetes manifest generated from the manifest.
-5. **CI recipes** — `analyze`, `test`, `contract diff` and `contract lint` as one command.
+1. **Publish the packages** — `laska_core`, `laska_contracts`, `laska_cli` and `laska_test` on
+   pub.dev, so a scaffolded project resolves its dependencies instead of a local workspace.
+2. **Auth hardening** — key rotation, JWKS support, the defence against the fixation of a session,
+   and the rate limiting.
+3. **The semver policy and the upgrade guide** — `laska upgrade` with the codemods of the breaking
+   changes of the runtime.
+4. **The compatibility matrix of the contracts** — what a service of one version accepts from a
+   client of another version.
+5. **The performance pass on the hot path** — the reuse of the buffers, the route tables that are
+   computed once, the budget of the allocations.
 
-Deferred to Phase 6: the release hardening, the auth work and the performance pass.
+Deferred to v1.1: the `@injectable` codegen, the ORM adapters and the Redis and NATS backends.
 
 ---
 

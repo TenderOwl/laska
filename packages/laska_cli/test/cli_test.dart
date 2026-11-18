@@ -209,6 +209,41 @@ services:
       expect(result.code, 66);
       expect(result.err, contains('does not exist'));
     });
+
+    test('fails when a service depends on a service that does not exist',
+        () async {
+      File('${workspace.path}/laska.yaml').writeAsStringSync('''
+services:
+  - name: orders
+    entrypoint: services/orders/bin/server.dart
+    port: 8081
+    depends_on: [users]
+''');
+
+      final result = await _run(<String>[
+        'dev',
+        '--manifest',
+        '${workspace.path}/laska.yaml',
+        '--no-collector',
+      ]);
+
+      expect(result.code, 65);
+      expect(result.err, contains('depends on "users"'));
+    });
+
+    test('fails when the manifest cannot be read', () async {
+      File('${workspace.path}/laska.yaml').writeAsStringSync('services\n');
+
+      final result = await _run(<String>[
+        'dev',
+        '--manifest',
+        '${workspace.path}/laska.yaml',
+        '--no-collector',
+      ]);
+
+      expect(result.code, 65);
+      expect(result.err, contains('cannot be read'));
+    });
   }, timeout: _timeout);
 
   group('laska migrate:run', () {

@@ -501,6 +501,21 @@ void main() {
         throwsA(isA<ServiceNotFoundException>()),
       );
     });
+
+    test('finds a service whatever the case of its name is', () {
+      final discovery = ServiceDiscovery.fromEnvironment(<String, String>{
+        'USERS_URL': 'http://localhost:8080',
+      });
+
+      expect(
+        discovery.resolve('users'),
+        Uri.parse('http://localhost:8080'),
+      );
+      expect(
+        discovery.resolve('USERS'),
+        Uri.parse('http://localhost:8080'),
+      );
+    });
   });
 
   group('the status mapping', () {

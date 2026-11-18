@@ -10,6 +10,7 @@ export 'src/compile.dart';
 export 'src/diff.dart';
 export 'src/generator/dart_generator.dart';
 export 'src/generator/openapi_generator.dart';
+export 'src/lint.dart';
 export 'src/model.dart';
 export 'src/naming.dart';
 export 'src/parser.dart';

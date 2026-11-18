@@ -19,6 +19,24 @@ String camelCase(String value) {
   return head + parts.skip(1).map(_capitalize).join();
 }
 
+/// Converts a [value] to snake_case.
+String snakeCase(String value) =>
+    _splitWords(value).map((word) => word.toLowerCase()).join('_');
+
+/// Whether [value] is written in PascalCase.
+bool isPascalCase(String value) =>
+    value.isNotEmpty && pascalCase(value) == value;
+
+/// Whether [value] is written in snake_case.
+bool isSnakeCase(String value) =>
+    value.isNotEmpty &&
+    RegExp(r'^[a-z][a-z0-9]*(_[a-z0-9]+)*$').hasMatch(value);
+
+/// Whether [value] is written in UPPER_SNAKE_CASE.
+bool isUpperSnakeCase(String value) =>
+    value.isNotEmpty &&
+    RegExp(r'^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$').hasMatch(value);
+
 /// Converts an UPPER_SNAKE_CASE [value] to lowerCamelCase.
 ///
 /// Used for enum values, which are upper case in a contract but have to be

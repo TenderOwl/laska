@@ -69,6 +69,99 @@ services:
       );
     });
 
+    test('reads the environment of the workspace', () {
+      writeManifest('''
+environment:
+  LOG_LEVEL: debug
+
+services:
+  - name: users
+    entrypoint: bin/server.dart
+    port: 8080
+''');
+
+      final result = readWorkspace(File('${workspace.path}/laska.yaml'));
+
+      expect(result.environment, <String, String>{'LOG_LEVEL': 'debug'});
+    });
+
+    test('reads the dependencies of a service', () {
+      writeManifest('''
+services:
+  - name: users
+    entrypoint: bin/server.dart
+    port: 8080
+  - name: orders
+    entrypoint: bin/orders.dart
+    port: 8081
+    depends_on: [users]
+''');
+
+      final result = readWorkspace(File('${workspace.path}/laska.yaml'));
+
+      expect(result.services.last.dependsOn, <String>['users']);
+    });
+
+    test('reads the dependencies of a service written as a list', () {
+      writeManifest('''
+services:
+  - name: users
+    entrypoint: bin/server.dart
+    port: 8080
+  - name: orders
+    entrypoint: bin/orders.dart
+    port: 8081
+    depends_on:
+      - users
+''');
+
+      final result = readWorkspace(File('${workspace.path}/laska.yaml'));
+
+      expect(result.services.last.dependsOn, <String>['users']);
+    });
+
+    test('fails when a service depends on a service that does not exist', () {
+      writeManifest('''
+services:
+  - name: orders
+    entrypoint: bin/orders.dart
+    port: 8081
+    depends_on: [users]
+''');
+
+      expect(
+        () => readWorkspace(File('${workspace.path}/laska.yaml')),
+        throwsA(isA<WorkspaceException>()),
+      );
+    });
+
+    test('fails when the dependencies form a cycle', () {
+      writeManifest('''
+services:
+  - name: users
+    entrypoint: bin/server.dart
+    port: 8080
+    depends_on: [orders]
+  - name: orders
+    entrypoint: bin/orders.dart
+    port: 8081
+    depends_on: [users]
+''');
+
+      expect(
+        () => readWorkspace(File('${workspace.path}/laska.yaml')),
+        throwsA(isA<WorkspaceException>()),
+      );
+    });
+
+    test('fails when the manifest cannot be read', () {
+      writeManifest('services\n');
+
+      expect(
+        () => readWorkspace(File('${workspace.path}/laska.yaml')),
+        throwsA(isA<WorkspaceException>()),
+      );
+    });
     test('ignores the comments and the empty lines', () {
       writeManifest('''
 # the services of the workspace
@@ -210,6 +303,125 @@ services:
 
       expect(response.statusCode, 200);
       expect(collector.spansReceived, 0);
+    });
+  });
+
+  group('orderServices', () {
+    WorkspaceService service(String name, List<String> dependsOn) =>
+        WorkspaceService(
+          name: name,
+          entrypoint: 'bin/$name.dart',
+          port: 8080,
+          dependsOn: dependsOn,
+        );
+
+    test('starts a service after the services it depends on', () {
+      final ordered = orderServices(<WorkspaceService>[
+        service('orders', <String>['users']),
+        service('users', <String>[]),
+      ]);
+
+      expect(
+        ordered.map((service) => service.name),
+        <String>['users', 'orders'],
+      );
+    });
+
+    test('keeps the order of the services that do not depend on each other',
+        () {
+      final ordered = orderServices(<WorkspaceService>[
+        service('billing', <String>[]),
+        service('users', <String>[]),
+        service('orders', <String>['users']),
+      ]);
+
+      expect(
+        ordered.map((service) => service.name),
+        <String>['billing', 'users', 'orders'],
+      );
+    });
+
+    test('fails when the dependencies form a cycle', () {
+      expect(
+        () => orderServices(<WorkspaceService>[
+          service('users', <String>['orders']),
+          service('orders', <String>['users']),
+        ]),
+        throwsA(isA<WorkspaceException>()),
+      );
+    });
+  });
+
+  group('serviceEnvironment', () {
+    test('gives every service the address of the other services', () {
+      final workspace = Workspace(
+        services: <WorkspaceService>[
+          WorkspaceService(
+            name: 'users',
+            entrypoint: 'bin/users.dart',
+            port: 8080,
+          ),
+          WorkspaceService(
+            name: 'orders',
+            entrypoint: 'bin/orders.dart',
+            port: 8081,
+          ),
+        ],
+        environment: <String, String>{'LOG_LEVEL': 'debug'},
+      );
+
+      final environment =
+          serviceEnvironment(workspace.services.last, workspace);
+
+      expect(environment['USERS_URL'], 'http://127.0.0.1:8080');
+      expect(environment['ORDERS_URL'], 'http://127.0.0.1:8081');
+      expect(environment['LOG_LEVEL'], 'debug');
+    });
+
+    test('lets the service override the environment of the workspace', () {
+      final workspace = Workspace(
+        services: <WorkspaceService>[
+          WorkspaceService(
+            name: 'users',
+            entrypoint: 'bin/users.dart',
+            port: 8080,
+            environment: <String, String>{'LOG_LEVEL': 'trace'},
+          ),
+        ],
+        environment: <String, String>{'LOG_LEVEL': 'debug'},
+      );
+
+      final environment =
+          serviceEnvironment(workspace.services.single, workspace);
+
+      expect(environment['LOG_LEVEL'], 'trace');
+    });
+  });
+
+  group('waitForPort', () {
+    test('returns true when the port answers', () async {
+      final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+
+      final ready = await waitForPort(
+        '127.0.0.1',
+        server.port,
+        timeout: const Duration(seconds: 5),
+      );
+
+      await server.close();
+
+      expect(ready, isTrue);
+    });
+
+    test('returns false when the port stays closed', () async {
+      final ready = await waitForPort(
+        '127.0.0.1',
+        1,
+        timeout: const Duration(milliseconds: 300),
+        interval: const Duration(milliseconds: 50),
+      );
+
+      expect(ready, isFalse);
     });
   });
 }

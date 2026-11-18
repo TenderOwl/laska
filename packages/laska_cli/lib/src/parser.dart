@@ -42,6 +42,14 @@ ArgParser buildParser() {
     );
   addHelpFlag(compile);
 
+  final lint = contract.addCommand('lint')
+    ..addOption(
+      'proto',
+      help: 'Directory containing the .proto files.',
+      defaultsTo: 'api',
+    );
+  addHelpFlag(lint);
+
   final diff = contract.addCommand('diff')
     ..addOption(
       'base',
@@ -122,8 +130,99 @@ ArgParser buildParser() {
       'no-collector',
       negatable: false,
       help: 'Do not start the local telemetry collector.',
+    )
+    ..addOption(
+      'startup-timeout',
+      help: 'Seconds a service waits for the services it depends on.',
+      defaultsTo: '30',
     );
   addHelpFlag(dev);
+
+  final dockerfile = parser.addCommand('deploy:dockerfile')
+    ..addOption(
+      'manifest',
+      help: 'Workspace manifest. Defaults to laska.yaml.',
+      defaultsTo: 'laska.yaml',
+    )
+    ..addOption(
+      'out',
+      help: 'Directory the Dockerfiles are written to.',
+      defaultsTo: 'deploy',
+    )
+    ..addOption(
+      'image',
+      help: 'Repository the images are pushed to.',
+      defaultsTo: 'laska',
+    );
+  addHelpFlag(dockerfile);
+
+  final kubernetes = parser.addCommand('deploy:k8s')
+    ..addOption(
+      'manifest',
+      help: 'Workspace manifest. Defaults to laska.yaml.',
+      defaultsTo: 'laska.yaml',
+    )
+    ..addOption(
+      'out',
+      help: 'Directory the manifests are written to.',
+      defaultsTo: 'deploy',
+    )
+    ..addOption(
+      'image',
+      help: 'Repository the images are pulled from.',
+      defaultsTo: 'laska',
+    )
+    ..addOption(
+      'namespace',
+      help: 'Namespace of the manifests.',
+      defaultsTo: 'default',
+    );
+  addHelpFlag(kubernetes);
+
+  final recipe = parser.addCommand('ci:recipe')
+    ..addOption(
+      'out',
+      help: 'File the recipe is written to.',
+      defaultsTo: '.github/workflows/laska.yml',
+    )
+    ..addOption(
+      'proto',
+      help: 'Directory containing the .proto files.',
+      defaultsTo: 'api',
+    )
+    ..addOption(
+      'base',
+      help: 'Directory containing the baseline .proto files.',
+    )
+    ..addOption(
+      'candidate',
+      help: 'Directory containing the candidate .proto files.',
+    );
+  addHelpFlag(recipe);
+
+  final create = parser.addCommand('new')
+    ..addOption(
+      'out',
+      help: 'Directory the project is written to. Defaults to the current one.',
+      defaultsTo: '.',
+    )
+    ..addOption(
+      'port',
+      help: 'Port the service listens to in development.',
+      defaultsTo: '8080',
+    )
+    ..addOption(
+      'manifest',
+      help: 'Workspace manifest the service is added to.',
+      defaultsTo: 'laska.yaml',
+    )
+    ..addFlag(
+      'local',
+      negatable: false,
+      help: 'Depend on the packages of the local Laska workspace instead of '
+          'the published ones.',
+    );
+  addHelpFlag(create);
 
   parser.addCommand('help');
 

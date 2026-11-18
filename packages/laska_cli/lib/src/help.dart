@@ -54,6 +54,19 @@ const Map<String, CommandHelp> commandHelp = <String, CommandHelp>{
       'laska contract diff --base api-v1 --candidate api-v2 --quiet',
     ],
   ),
+  'contract lint': CommandHelp(
+    summary: 'Check a contract against the rules of the framework.',
+    description:
+        'Reads the .proto files of the directory and reports the problems of '
+        'the contract: a package that is not versioned, a file that does not '
+        'match its package, a message that is not written in PascalCase, a '
+        'field that is not written in snake_case, a service that does not end '
+        'with "Service". The command fails with the exit code 1 when it finds '
+        'a problem, so it can be used in a continuous integration pipeline.',
+    examples: <String>[
+      'laska contract lint --proto api',
+    ],
+  ),
   'serve': CommandHelp(
     summary: 'Run a service under the supervisor.',
     description:
@@ -85,10 +98,54 @@ const Map<String, CommandHelp> commandHelp = <String, CommandHelp>{
     description:
         'Starts the services of the workspace manifest, aggregates their logs '
         'into one stream and sends their telemetry to a local collector, '
-        'which prints the traces it receives.',
+        'which prints the traces it receives. The services are started in the '
+        'order of their dependencies, and every service gets the address of '
+        'the other services in its environment.',
     examples: <String>[
       'laska dev',
       'laska dev --manifest laska.yaml',
+    ],
+  ),
+  'new': CommandHelp(
+    summary: 'Scaffold a service or a workspace.',
+    description:
+        'Writes a service that is ready to run: the contract, the generated '
+        'code, the implementation, the entrypoint and a test. The service is '
+        'added to the manifest of the workspace. With a name instead of the '
+        'word "service", a whole workspace with a first service is written.',
+    examples: <String>[
+      'laska new service users',
+      'laska new service users --port 8081',
+      'laska new shop',
+    ],
+  ),
+  'deploy:dockerfile': CommandHelp(
+    summary: 'Write the Dockerfile of every service of the workspace.',
+    description:
+        'Writes one Dockerfile per service, built in two steps: the Dart SDK '
+        'compiles the service and the runtime image holds the binary alone.',
+    examples: <String>[
+      'laska deploy:dockerfile --manifest laska.yaml',
+    ],
+  ),
+  'deploy:k8s': CommandHelp(
+    summary: 'Write the Kubernetes manifests of every service.',
+    description:
+        'Writes the deployment and the service of every service of the '
+        'workspace, so the cluster runs the same services as the workspace.',
+    examples: <String>[
+      'laska deploy:k8s --manifest laska.yaml --namespace laska',
+    ],
+  ),
+  'ci:recipe': CommandHelp(
+    summary: 'Write the recipe of the continuous integration.',
+    description:
+        'Writes a workflow that runs the format, the analyzer, the tests, the '
+        'lint of the contract and the comparison of the contract with its '
+        'baseline.',
+    examples: <String>[
+      'laska ci:recipe --out .github/workflows/laska.yml',
+      'laska ci:recipe --base contracts/v1 --candidate contracts/v2',
     ],
   ),
   'help': CommandHelp(
@@ -283,6 +340,16 @@ class LaskaHelp {
         _Entry(
           'LASKA_MIGRATIONS_DIRECTORY',
           'The directory the SQL migrations are read from.',
+        ),
+        _Entry(
+          'LASKA_SERVICES',
+          'The addresses of the services of the workspace, as "name=url" pairs '
+              'separated by commas.',
+        ),
+        _Entry(
+          '<NAME>_URL',
+          'The address of one service. `laska dev` sets it for every service '
+              'of the workspace, so the discovery finds them.',
         ),
       ];
 

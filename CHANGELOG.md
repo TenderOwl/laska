@@ -1,5 +1,35 @@
 ## Unreleased
 
+- **Implemented the workspace and the CLI maturity (Phase 5):**
+  - `laska new service <name>` writes a service that runs: the contract, the
+    generated code, the implementation, the entrypoint, a test and the manifest of
+    the package. `laska new <name>` writes a whole workspace with a first service
+    in it. The `--local` flag makes the project depend on the packages of a local
+    Laska workspace, which is what a checkout needs while the packages are not
+    published.
+  - The manifest of the workspace grew: an `environment` for the whole workspace
+    and a `depends_on` for a service. `laska dev` starts the services in the order
+    of their dependencies, waits for the services a service depends on to answer
+    before it starts it (`--startup-timeout`), and gives every service the address
+    of the other ones (`USERS_URL`), which is what the service discovery of the
+    runtime reads.
+  - The manifest is read by a pure-Dart YAML parser that ships with the CLI
+    (`packages/laska_cli/lib/src/yaml.dart`): nested maps, lists of scalars, lists
+    of maps, inline lists, comments and quotes. An unknown dependency and a cycle
+    of dependencies are reported before anything is started.
+  - `laska deploy:dockerfile` and `laska deploy:k8s` write the images and the
+    Kubernetes manifests of the services of the workspace. The Dockerfile compiles
+    the service with the Dart SDK and the runtime image holds the binary alone.
+  - `laska contract lint` checks the contract against the rules of the framework:
+    a versioned package that matches the name of the file, the messages and the
+    services in PascalCase, the services ending with `Service`, the fields in
+    snake_case and the values of the enums in UPPER_SNAKE_CASE. The command fails
+    with the exit code 1 when it finds a problem.
+  - `laska ci:recipe` writes the recipe of the continuous integration: the
+    format, the analyzer, the tests, the lint of the contract and the comparison
+    of the contract with its baseline.
+  - The guides live in `docs/`: getting started, contracts, observability,
+    resilience and deployment.
 - **Implemented the inter-service and resilience layer (Phase 4):**
   - **The policy of a call is written in the contract.** A service (or a single method) declares
     `option (laska.policy) = { timeout_ms, max_attempts, backoff_ms, max_backoff_ms, jitter,

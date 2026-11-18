@@ -66,14 +66,32 @@ class ServiceDiscovery {
   Set<String> get names => _services.keys.toSet();
 
   /// The address of the service [name], or `null` when it is not known.
-  Uri? find(String name) => _services[name];
+  ///
+  /// The lookup ignores the case of the name, so a service that the
+  /// environment declares as `USERS_URL` is found as `users` — which is how
+  /// the services of a workspace are named.
+  Uri? find(String name) {
+    final exact = _services[name];
+    if (exact != null) {
+      return exact;
+    }
+
+    final lower = name.toLowerCase();
+    for (final entry in _services.entries) {
+      if (entry.key.toLowerCase() == lower) {
+        return entry.value;
+      }
+    }
+
+    return null;
+  }
 
   /// The address of the service [name].
   ///
   /// Throws [ServiceNotFoundException] when the service is not known, so a
   /// missing address is a clear error and not a call to `null`.
   Uri resolve(String name) {
-    final uri = _services[name];
+    final uri = find(name);
     if (uri == null) {
       throw ServiceNotFoundException(name, known: names.toList()..sort());
     }
