@@ -1,5 +1,47 @@
 ## Unreleased
 
+- **Implemented the release hardening (Phase 6):**
+  - **The authentication of the callers.** `laska_core/src/auth/` holds the tokens
+    (`HS256`, `RS256/384/512`, `ES256/384/512`), the API keys, the sessions and the
+    rate limiting. The verifier does not trust the header of a token: the algorithm of the
+    token has to be the algorithm of the key that signed it, so `alg: none` and the
+    confusion of the algorithms are refused. Every failure answers with a `401` or a
+    `403` that does not tell what is wrong with the secret of the caller.
+  - **The keys of the service and their rotation.** The key set of a service is published
+    as a JWKS, and the cache of the set refreshes it when a token names a key it does not
+    know — never more than once every ten seconds, so a flood of made-up `kid`s cannot
+    turn the service into a client of itself. `laska keys generate` writes the private key
+    in a file of its own and the public key set next to it.
+  - **The sessions.** The id of a session is regenerated when the privileges of the
+    session change, so an id that leaked before the login is dead afterwards: that is the
+    defence against the fixation of a session. The cookie is written with `HttpOnly`,
+    `Secure` and `SameSite`.
+  - **The rate limiting.** A token bucket per caller: the principal or the API key when the
+    caller is known, its address otherwise, so the limit follows the caller and not the
+    connection. The caller that asks for too much gets a `429` and a `retry-after`.
+  - **The policy of the versions.** A breaking change goes to the next major version of the
+    API, and a change that breaks nobody stays in the version it is in. The rule is
+    checked by `laska contract diff`, which fails with the exit code 1 when the version of
+    the candidate does not follow it. `laska upgrade --api users --from v1 --to v2` moves
+    the contract, the generated code and the calls of the service together.
+  - **The matrix of the compatibility.** `laska contract matrix` compares every version of
+    a contract with every other one and tells which client works against which server: the
+    versions that were added, the ones the server lost, and the paths that differ because
+    the version of an API lives in the paths of its REST projection.
+  - **A workspace that runs as it is.** `laska new <name>` writes two services: the first
+    one keeps the records, the second one calls it through the typed client of its
+    contract. The trace of the caller goes from one service to the other, so the project
+    shows the whole path of the framework. `laska dev` resolves the dependencies of every
+    service before it starts it.
+  - **The performance of the hot path.** The tables of the router are built when a route
+    is registered, the expressions of the constraints are compiled once, the chain of the
+    middleware of a route is built once and kept, the request is not copied for the
+    parameters of its route, and the body of a request is read into a buffer that comes
+    from a pool. The budget of the hot path is a number of objects per request, and the
+    tests hold the runtime to it. `tool/benchmark.dart` measures it.
+  - The guides of the release live in `docs/`: authentication, versioning, upgrading,
+    compatibility and performance.
+
 - **Implemented the workspace and the CLI maturity (Phase 5):**
   - `laska new service <name>` writes a service that runs: the contract, the
     generated code, the implementation, the entrypoint, a test and the manifest of

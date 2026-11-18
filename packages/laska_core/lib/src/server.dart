@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'app.dart';
+import 'buffers.dart';
 import 'db/migrations.dart';
 import 'request.dart';
 import 'supervisor.dart';
@@ -55,6 +56,9 @@ class LaskaServer {
   int _inFlight = 0;
   bool _closing = false;
   Completer<void>? _drained;
+
+  /// The pool of the buffers the bodies of the requests are read into.
+  final BufferPool _pool = BufferPool();
 
   /// The underlying server, once it is started.
   HttpServer? get server => _server;
@@ -138,7 +142,7 @@ class LaskaServer {
   }
 
   Future<Request> _readRequest(HttpRequest httpRequest) async {
-    final body = await utf8.decoder.bind(httpRequest).join();
+    final body = await _readBody(httpRequest);
     final headers = <String, String>{};
     httpRequest.headers.forEach((name, values) {
       headers[name.toLowerCase()] = values.join(', ');
@@ -151,6 +155,28 @@ class LaskaServer {
       headers: headers,
       body: body,
     );
+  }
+
+  /// Reads the body of the request into a buffer of the pool.
+  ///
+  /// The buffer goes back to the pool when the body was read, so the server
+  /// does not build a buffer for every request it answers.
+  Future<String> _readBody(HttpRequest httpRequest) async {
+    final buffer = BodyBuffer(_pool);
+    await for (final chunk in httpRequest) {
+      buffer.add(chunk);
+    }
+
+    try {
+      final bytes = buffer.take();
+      if (bytes.isEmpty) {
+        return '';
+      }
+      return utf8.decode(bytes);
+    } finally {
+      // The buffer goes back to the pool when the body was decoded.
+      buffer.release();
+    }
   }
 }
 

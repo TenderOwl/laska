@@ -111,6 +111,17 @@ pipeline fails on it. The rules are the ones of Buf: a field that is removed,
 a field number that is reused, a type that changes and a method that
 disappears are breaking changes.
 
+The diff compares two versions. When a contract has more than two versions,
+the [matrix of the compatibility](compatibility.md) compares every version
+with every other one:
+
+```console
+$ dart run laska_cli:laska contract matrix --dir contracts
+client \ server  v1      v2
+v1               yes     yes*
+v2               yes*    yes
+```
+
 ## Check the contract
 
 ```console

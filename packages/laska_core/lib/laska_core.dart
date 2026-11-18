@@ -7,6 +7,16 @@
 library;
 
 export 'src/app.dart';
+export 'src/auth/api_key.dart';
+export 'src/auth/bytes.dart';
+export 'src/auth/jwt.dart';
+export 'src/auth/jwks.dart';
+export 'src/auth/keys.dart';
+export 'src/auth/middleware.dart';
+export 'src/auth/principal.dart';
+export 'src/auth/rate_limit.dart';
+export 'src/auth/session.dart';
+export 'src/buffers.dart';
 export 'src/config.dart';
 export 'src/context.dart';
 export 'src/db/database.dart';

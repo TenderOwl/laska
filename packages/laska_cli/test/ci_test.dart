@@ -133,6 +133,23 @@ message user_profile {
         contains('contract diff --base contracts/v1 --candidate contracts/v2'),
       );
     });
+
+    test('adds the matrix of the versions when it is given', () async {
+      await _run(<String>[
+        'ci:recipe',
+        '--out',
+        '${workspace.path}/laska.yml',
+        '--matrix',
+        'contracts',
+      ]);
+
+      final recipe = File('${workspace.path}/laska.yml').readAsStringSync();
+
+      expect(
+        recipe,
+        contains('contract matrix --dir contracts --out matrix.md'),
+      );
+    });
   });
 
   group('renderCiRecipe', () {

@@ -66,6 +66,27 @@ ArgParser buildParser() {
     );
   addHelpFlag(diff);
 
+  final matrix = contract.addCommand('matrix')
+    ..addMultiOption(
+      'version',
+      help: 'Directory holding the .proto files of a version of the contract. '
+          'The option may be repeated.',
+    )
+    ..addOption(
+      'dir',
+      help: 'Directory holding one directory per version of the contract.',
+    )
+    ..addOption(
+      'out',
+      help: 'File the matrix is written to, as Markdown.',
+    )
+    ..addFlag(
+      'details',
+      negatable: false,
+      help: 'Report the difference of every pair of versions.',
+    );
+  addHelpFlag(matrix);
+
   final serve = parser.addCommand('serve')
     ..addOption(
       'entrypoint',
@@ -135,6 +156,12 @@ ArgParser buildParser() {
       'startup-timeout',
       help: 'Seconds a service waits for the services it depends on.',
       defaultsTo: '30',
+    )
+    ..addFlag(
+      'no-pub-get',
+      negatable: false,
+      help:
+          'Do not resolve the dependencies of the services before they start.',
     );
   addHelpFlag(dev);
 
@@ -197,6 +224,11 @@ ArgParser buildParser() {
     ..addOption(
       'candidate',
       help: 'Directory containing the candidate .proto files.',
+    )
+    ..addOption(
+      'matrix',
+      help: 'Directory holding one directory per version of the contract. The '
+          'recipe writes the matrix of the versions.',
     );
   addHelpFlag(recipe);
 
@@ -223,6 +255,57 @@ ArgParser buildParser() {
           'the published ones.',
     );
   addHelpFlag(create);
+
+  final keys = parser.addCommand('keys');
+  addHelpFlag(keys);
+
+  final generate = keys.addCommand('generate')
+    ..addOption(
+      'alg',
+      help: 'Algorithm of the key: rs256, rs384, rs512, es256, es384, es512 '
+          'or hs256.',
+      defaultsTo: 'rs256',
+    )
+    ..addOption(
+      'out',
+      help: 'Directory the key is written to.',
+      defaultsTo: 'keys',
+    )
+    ..addOption(
+      'kid',
+      help: 'Id of the key. Defaults to a generated one.',
+    )
+    ..addOption(
+      'bits',
+      help: 'Size of the key of RSA, in bits.',
+      defaultsTo: '2048',
+    );
+  addHelpFlag(generate);
+
+  final upgrade = parser.addCommand('upgrade')
+    ..addOption(
+      'api',
+      help: 'Name of the API whose version goes up, e.g. users.',
+    )
+    ..addOption(
+      'from',
+      help: 'The current version of the API, e.g. v1.',
+    )
+    ..addOption(
+      'to',
+      help: 'The new version of the API, e.g. v2.',
+    )
+    ..addOption(
+      'path',
+      help: 'Directory of the service.',
+      defaultsTo: '.',
+    )
+    ..addFlag(
+      'dry-run',
+      negatable: false,
+      help: 'Only show what the upgrade would change.',
+    );
+  addHelpFlag(upgrade);
 
   parser.addCommand('help');
 

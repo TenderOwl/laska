@@ -19,19 +19,26 @@ created: laska.yaml
 ```
 
 The service is added to the manifest of the workspace, so `laska dev` starts
-it. A whole workspace with a first service is written with a name instead of
-the word `service`:
+it. A whole workspace is written with a name instead of the word `service`:
 
 ```console
-$ dart run laska_cli:laska new shop
+$ laska new shop
 created: shop/laska.yaml
 created: shop/services/shop/api/shop.proto
+created: shop/services/shop_gateway/api/shop_gateway.proto
 ...
 ```
 
-> The packages of Laska are not published yet, so a project that is scaffolded
-> from a checkout depends on the local workspace. The `--local` flag writes
-> that dependency; without it the project depends on the published packages.
+The workspace holds two services: the first one keeps the records and the
+second one calls it through the typed client of its contract and answers with a
+view of them. The second service shows the whole path of the framework — the
+contract, the generated client, the policy of the calls, the trace that goes
+from one service to the other — in a project that runs as it is.
+
+> A project that is scaffolded from a checkout of the repository depends on the
+> local workspace, because the packages are not published yet. The `--local`
+> flag writes that dependency; without it the project depends on the published
+> packages.
 
 ## Run the service
 
@@ -109,6 +116,10 @@ waits for the services it depends on to answer before it is started. Every
 service gets the address of the other services in its environment —
 `USERS_URL`, `ORDERS_URL` — which is what the service discovery of the
 runtime reads.
+
+The dependencies of every service are resolved before it starts, so a workspace
+that was just scaffolded runs without a manual `dart pub get`. The
+`--no-pub-get` flag skips that step.
 
 ## Test the service
 

@@ -35,6 +35,16 @@ class ParamConstraint {
     'slug',
   };
 
+  // The expressions of the known kinds are compiled once. A constraint is
+  // checked on every request that reaches it, so compiling the expression
+  // there would allocate on the hot path.
+  static final RegExp _float = RegExp(r'^-?\d+(\.\d+)?$');
+  static final RegExp _uuid = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
+    r'[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+  static final RegExp _slug = RegExp(r'^[a-z0-9]+(?:-[a-z0-9]+)*$');
+
   /// Whether [value] satisfies the constraint.
   bool matches(String value) {
     final custom = pattern;
@@ -43,22 +53,48 @@ class ParamConstraint {
     }
     switch (kind) {
       case 'int':
-        return RegExp(r'^-?\d+$').hasMatch(value);
+        return _isInteger(value);
       case 'float':
-        return RegExp(r'^-?\d+(\.\d+)?$').hasMatch(value);
+        return _float.hasMatch(value);
       case 'bool':
-        return RegExp(r'^(true|false|0|1)$').hasMatch(value);
+        return _isBoolean(value);
       case 'uuid':
-        return RegExp(
-          r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
-          r'[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
-        ).hasMatch(value);
+        return _uuid.hasMatch(value);
       case 'slug':
-        return RegExp(r'^[a-z0-9]+(?:-[a-z0-9]+)*$').hasMatch(value);
+        return _slug.hasMatch(value);
       default:
         return true;
     }
   }
+
+  /// Whether [value] is an integer, as `^-?\d+$` says.
+  ///
+  /// The check is written out, because a parameter with a constraint is
+  /// checked on every request that reaches it and the expression of the
+  /// constraint is slower than the check itself.
+  static bool _isInteger(String value) {
+    if (value.isEmpty) {
+      return false;
+    }
+    var start = 0;
+    if (value.codeUnitAt(0) == 0x2d) {
+      if (value.length == 1) {
+        return false;
+      }
+      start = 1;
+    }
+    for (var index = start; index < value.length; index++) {
+      final code = value.codeUnitAt(index);
+      if (code < 0x30 || code > 0x39) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// Whether [value] is a boolean, as `^(true|false|0|1)$` says.
+  static bool _isBoolean(String value) =>
+      value == 'true' || value == 'false' || value == '0' || value == '1';
 
   /// Parses the constraint written inside `<...>` in a route pattern.
   ///
@@ -146,7 +182,7 @@ class RouteInfo {
     required this.middleware,
     this.name,
     this.app,
-  });
+  }) : score = _scoreOf(segments);
 
   /// HTTP method, upper case.
   final String method;
@@ -171,6 +207,21 @@ class RouteInfo {
   /// The dispatcher reads the middleware of the application and of its groups
   /// from it, so the global middleware applies to every route.
   final Laska? app;
+
+  /// The specificity of the route, computed once when it is registered.
+  ///
+  /// The score of a route never changes, so the router does not have to
+  /// compute it again for every request.
+  final int score;
+
+  /// The specificity of the [segments], used to pick the best match.
+  static int _scoreOf(List<RouteSegment> segments) {
+    var score = 0;
+    for (final segment in segments) {
+      score = score * 10 + segment.specificity;
+    }
+    return score;
+  }
 
   @override
   String toString() => '$method $path';
@@ -211,7 +262,10 @@ class RouteNotFound implements Exception {
 /// * `/files/*` — a wildcard matching the rest of the path.
 class Router {
   final List<RouteInfo> _routes = <RouteInfo>[];
-  final Map<String, RouteInfo> _staticRoutes = <String, RouteInfo>{};
+  final Map<String, Map<String, RouteInfo>> _staticRoutes =
+      <String, Map<String, RouteInfo>>{};
+  final Map<String, List<RouteInfo>> _routesByMethod =
+      <String, List<RouteInfo>>{};
   final Map<String, RouteInfo> _namedRoutes = <String, RouteInfo>{};
 
   /// Registers a route.
@@ -224,8 +278,9 @@ class Router {
     Laska? app,
   }) {
     final normalized = normalizePath(path);
+    final verb = method.toUpperCase();
     final route = RouteInfo(
-      method: method.toUpperCase(),
+      method: verb,
       path: normalized,
       segments: parsePattern(normalized),
       handler: handler,
@@ -234,9 +289,15 @@ class Router {
       app: app,
     );
     _routes.add(route);
+
+    // The tables of the router are built when the route is registered, so a
+    // request only reads them.
+    _routesByMethod.putIfAbsent(verb, () => <RouteInfo>[]).add(route);
     if (route.segments.every((segment) => segment.literal != null)) {
-      _staticRoutes['${route.method} ${route.path}'] = route;
+      _staticRoutes.putIfAbsent(verb, () => <String, RouteInfo>{})[route.path] =
+          route;
     }
+
     if (name != null) {
       final existing = _namedRoutes[name];
       if (existing != null) {
@@ -256,9 +317,19 @@ class Router {
   /// wildcards.
   RouteMatch? lookup(String method, String path) {
     final normalized = normalizePath(path);
-    final exact = _staticRoutes['${method.toUpperCase()} $normalized'];
-    if (exact != null) {
-      return RouteMatch(exact, const <String, String>{});
+    final verb = method.toUpperCase();
+
+    final staticRoutes = _staticRoutes[verb];
+    if (staticRoutes != null) {
+      final exact = staticRoutes[normalized];
+      if (exact != null) {
+        return RouteMatch(exact, const <String, String>{});
+      }
+    }
+
+    final candidates = _routesByMethod[verb];
+    if (candidates == null) {
+      return null;
     }
 
     final segments = splitPath(normalized);
@@ -266,19 +337,15 @@ class Router {
     Map<String, String>? bestParams;
     var bestScore = -1;
 
-    for (final route in _routes) {
-      if (route.method != method.toUpperCase()) {
-        continue;
-      }
+    for (final route in candidates) {
       final params = _match(route.segments, segments);
       if (params == null) {
         continue;
       }
-      final score = _score(route.segments);
-      if (score > bestScore) {
+      if (route.score > bestScore) {
         best = route;
         bestParams = params;
-        bestScore = score;
+        bestScore = route.score;
       }
     }
 
@@ -388,28 +455,22 @@ class Router {
     return buffer.toString().isEmpty ? '/' : buffer.toString();
   }
 
-  static int _score(List<RouteSegment> segments) {
-    var score = 0;
-    for (final segment in segments) {
-      score = score * 10 + segment.specificity;
-    }
-    return score;
-  }
-
   static Map<String, String>? _match(
     List<RouteSegment> pattern,
     List<String> path,
   ) {
-    final params = <String, String>{};
+    // The map of the parameters is only created when the route captures one,
+    // so a route without parameters costs nothing on the hot path.
+    Map<String, String>? params;
 
     for (var i = 0; i < pattern.length; i++) {
       final segment = pattern[i];
 
       if (segment.wildcard) {
         if (i < path.length) {
-          params['*'] = path.sublist(i).join('/');
+          (params ??= <String, String>{})['*'] = path.sublist(i).join('/');
         }
-        return params;
+        return params ?? const <String, String>{};
       }
 
       if (i >= path.length) {
@@ -432,13 +493,13 @@ class Router {
       if (constraint != null && !constraint.matches(value)) {
         return null;
       }
-      params[segment.parameter!] = value;
+      (params ??= <String, String>{})[segment.parameter!] = value;
     }
 
     if (path.length > pattern.length) {
       return null;
     }
-    return params;
+    return params ?? const <String, String>{};
   }
 }
 

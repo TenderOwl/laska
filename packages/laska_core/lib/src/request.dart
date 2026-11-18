@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+import 'auth/api_key.dart';
+import 'auth/principal.dart';
+import 'auth/session.dart';
 import 'errors.dart';
 import 'telemetry/tracer.dart';
 
@@ -35,7 +38,10 @@ class Request {
   final String body;
 
   /// Route parameters captured by the router.
-  final Map<String, String> params;
+  ///
+  /// The dispatcher fills them after the route is found, so the request is not
+  /// copied for every request that reaches a handler.
+  Map<String, String> params;
 
   /// The id of the request, assigned by the request id middleware.
   String? id;
@@ -54,6 +60,18 @@ class Request {
   /// The idempotency middleware sets it, so a handler can use the key of the
   /// caller to make its own work idempotent.
   String? idempotencyKey;
+
+  /// Who is calling, when the authentication middleware knows it.
+  ///
+  /// The middleware of the token or of the API key sets it, so a handler
+  /// asks the request who the caller is instead of reading the headers.
+  Principal? principal;
+
+  /// The session of the caller, when the request carries one.
+  Session? session;
+
+  /// The API key of the caller, when the request carries one.
+  ApiKey? apiKey;
 
   /// Returns the value of the [name] header, or `null` when it is absent.
   String? header(String name) => headers[name.toLowerCase()];
@@ -98,6 +116,9 @@ class Request {
     copy.traceContext = traceContext;
     copy.routePattern = routePattern;
     copy.idempotencyKey = idempotencyKey;
+    copy.principal = principal;
+    copy.session = session;
+    copy.apiKey = apiKey;
     return copy;
   }
 }

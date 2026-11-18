@@ -183,7 +183,7 @@ services:
   });
 
   group('laska new', () {
-    test('writes a workspace with a first service', () async {
+    test('writes a workspace with two services', () async {
       final result = await _run(<String>[
         'new',
         'shop',
@@ -199,13 +199,59 @@ services:
         File('${root.path}/services/shop/api/shop.proto').existsSync(),
         isTrue,
       );
+      expect(
+        File('${root.path}/services/shop_gateway/api/shop_gateway.proto')
+            .existsSync(),
+        isTrue,
+      );
 
       final workspaceModel = readWorkspace(File('${root.path}/laska.yaml'));
-      expect(workspaceModel.services.single.name, 'shop');
       expect(
-        workspaceModel.services.single.entrypoint,
+        workspaceModel.services.map((service) => service.name),
+        <String>['shop', 'shop_gateway'],
+      );
+      expect(
+        workspaceModel.services.first.entrypoint,
         'services/shop/bin/server.dart',
       );
+      expect(
+        workspaceModel.services.last.entrypoint,
+        'services/shop_gateway/bin/server.dart',
+      );
+      expect(workspaceModel.services.last.dependsOn, <String>['shop']);
+      expect(workspaceModel.services.last.port, 8081);
+    });
+
+    test('the gateway calls the service behind it with a tracer', () async {
+      await _run(<String>[
+        'new',
+        'shop',
+        '--out',
+        workspace.path,
+      ]);
+
+      final entrypoint = File(
+        '${workspace.path}/shop/services/shop_gateway/bin/server.dart',
+      ).readAsStringSync();
+
+      expect(entrypoint, contains('tracer: observability.tracer'));
+      expect(entrypoint, contains('ShopServiceClient('));
+    });
+
+    test('the gateway depends on the package of the service behind it',
+        () async {
+      await _run(<String>[
+        'new',
+        'shop',
+        '--out',
+        workspace.path,
+      ]);
+
+      final pubspec = File(
+        '${workspace.path}/shop/services/shop_gateway/pubspec.yaml',
+      ).readAsStringSync();
+
+      expect(pubspec, contains('shop_service: {path: '));
     });
   });
 

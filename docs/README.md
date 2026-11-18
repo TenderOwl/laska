@@ -11,7 +11,12 @@ built into the runtime.
 | [Contracts](contracts.md) | The contract format, the policy of the calls, the generated code, the diff and the lint. |
 | [Observability](observability.md) | Traces, metrics, logs and the health probes. |
 | [Resilience](resilience.md) | Timeouts, retries, circuit breaker, bulkhead, idempotency and the outbox. |
+| [Authentication](auth.md) | The tokens, the JWKS, the API keys, the sessions and the limits of the callers. |
 | [Deployment](deployment.md) | The images, the Kubernetes manifests and the recipe of the continuous integration. |
+| [Versioning](versioning.md) | The semver policy of the packages and of the APIs, and how a breaking change is detected. |
+| [Upgrading](upgrading.md) | How a service moves to a new version of the framework or of its own API. |
+| [Compatibility](compatibility.md) | The matrix of the versions of a contract: which client works against which server. |
+| [Performance](performance.md) | The hot path of the runtime, its budget and the benchmark. |
 
 The long-term design and the roadmap live in [PLAN.md](../PLAN.md) at the root
 of the repository. The commands of the CLI are described by their own help:

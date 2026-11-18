@@ -67,6 +67,22 @@ const Map<String, CommandHelp> commandHelp = <String, CommandHelp>{
       'laska contract lint --proto api',
     ],
   ),
+  'contract matrix': CommandHelp(
+    summary: 'Write the compatibility matrix of the versions of a contract.',
+    description:
+        'Compares every version of a contract with every other one and tells '
+        'which client works against which server. The rows of the matrix are '
+        'the clients, the columns are the servers. A cell reads "yes" when the '
+        'client works against the server, "partly" when the server lacks a part '
+        'of what the client expects and "no" when the client cannot work '
+        'against the server. The versions are read from the directories given '
+        'with --version, or from the subdirectories of the directory given with '
+        '--dir.',
+    examples: <String>[
+      'laska contract matrix --dir contracts',
+      'laska contract matrix --version api/v1 --version api/v2 --out matrix.md',
+    ],
+  ),
   'serve': CommandHelp(
     summary: 'Run a service under the supervisor.',
     description:
@@ -146,6 +162,41 @@ const Map<String, CommandHelp> commandHelp = <String, CommandHelp>{
     examples: <String>[
       'laska ci:recipe --out .github/workflows/laska.yml',
       'laska ci:recipe --base contracts/v1 --candidate contracts/v2',
+      'laska ci:recipe --matrix contracts',
+    ],
+  ),
+  'keys': CommandHelp(
+    summary: 'Manage the keys of the service.',
+    description:
+        'The key commands make the keys that sign and verify the tokens of the '
+        'service. The keys are written in the JWK format, so the service may '
+        'publish its key set and the callers may fetch it.',
+  ),
+  'keys generate': CommandHelp(
+    summary: 'Generate a key of the service.',
+    description:
+        'Generates a key and writes it in the given directory. The private key '
+        'goes to a file of its own and the key set of the service goes to '
+        'jwks.json next to it. The private file holds a secret, so it must not '
+        'be published. A key that is generated again with the same id replaces '
+        'the old one in the key set, which is how a service rotates its keys.',
+    examples: <String>[
+      'laska keys generate --alg rs256 --out keys',
+      'laska keys generate --alg es256 --out keys --kid auth-2026',
+    ],
+  ),
+  'upgrade': CommandHelp(
+    summary: 'Move a service to a new version.',
+    description:
+        'With --api, the command moves the contract, the generated code and '
+        'the calls of the service to the new version of the API, so a '
+        'breaking change goes live next to the old one. Without it, the '
+        'command runs the codemods of the step of the framework. Run it with '
+        '--dry-run first to see what it would change.',
+    examples: <String>[
+      'laska upgrade --api users --from v1 --to v2',
+      'laska upgrade --api users --from v1 --to v2 --dry-run',
+      'laska upgrade --from 0.1.0 --to 0.2.0',
     ],
   ),
   'help': CommandHelp(

@@ -58,6 +58,50 @@ class ScaffoldException implements Exception {
   String toString() => 'ScaffoldException: $message';
 }
 
+/// The service that a scaffolded service calls.
+///
+/// The service behind the dependency holds the records, and the scaffolded
+/// service answers with a view of them. The client of the dependency comes
+/// from the contract of the dependency, so it carries the policy of the
+/// calls: the timeout, the retries, the circuit breaker and the bulkhead.
+class ServiceDependency {
+  /// Creates a dependency.
+  const ServiceDependency({
+    required this.name,
+    required this.package,
+    required this.generated,
+    required this.service,
+    required this.method,
+    required this.requestType,
+    required this.responseType,
+    required this.entity,
+  });
+
+  /// The name of the service, e.g. `shop`.
+  final String name;
+
+  /// The package of the service, e.g. `shop_service`.
+  final String package;
+
+  /// The generated file of the contract of the service, e.g. `shop.pb.dart`.
+  final String generated;
+
+  /// The interface of the service, e.g. `ShopService`.
+  final String service;
+
+  /// The method the scaffolded service calls, e.g. `GetShop`.
+  final String method;
+
+  /// The request of the method, e.g. `GetShopRequest`.
+  final String requestType;
+
+  /// The answer of the method, e.g. `Shop`.
+  final String responseType;
+
+  /// The name of the records of the service, e.g. `shop`.
+  final String entity;
+}
+
 /// Scaffolds the service [name] inside [directory].
 ///
 /// The service is written in the directory itself, which is created when it
@@ -67,12 +111,16 @@ class ScaffoldException implements Exception {
 ///
 /// When [localWorkspace] is the directory of a Laska workspace, the project
 /// depends on the packages of that workspace instead of the published ones.
+///
+/// When the service calls the service of the [dependency], the implementation
+/// answers with a view of the records of that service.
 Future<ScaffoldResult> scaffoldService(
   String name, {
   required Directory directory,
   int port = 8080,
   String? package,
   String? localWorkspace,
+  ServiceDependency? dependency,
 }) async {
   final snake = snakeCase(name);
   if (snake.isEmpty) {
@@ -85,7 +133,12 @@ Future<ScaffoldResult> scaffoldService(
   final entity = snake.endsWith('s') && snake.length > 1
       ? snake.substring(0, snake.length - 1)
       : snake;
-  final entityPascal = pascalCase(entity);
+  // A service that calls another service answers with a view of the records
+  // of that service, so the names of the two do not clash in the code that
+  // uses both of them.
+  final recordEntity =
+      dependency == null ? entity : '${dependency.entity}_view';
+  final entityPascal = pascalCase(recordEntity);
   final contractPackage = package ?? '$snake.v1';
   final serviceName = '${pascal}Service';
   final method = 'Get$entityPascal';
@@ -126,34 +179,58 @@ Future<ScaffoldResult> scaffoldService(
 
   final serviceFile = File('${lib.path}/${snake}_service.dart');
   await serviceFile.writeAsString(
-    _service(
-      service: serviceName,
-      method: camelCase(method),
-      requestType: requestType,
-      responseType: responseType,
-      generated: generated,
-    ),
+    dependency == null
+        ? _service(
+            service: serviceName,
+            method: camelCase(method),
+            requestType: requestType,
+            responseType: responseType,
+            generated: generated,
+          )
+        : _serviceWithDependency(
+            service: serviceName,
+            method: camelCase(method),
+            requestType: requestType,
+            responseType: responseType,
+            generated: generated,
+            dependency: dependency,
+          ),
   );
   written.add(serviceFile.path);
 
   final entrypoint = File('${bin.path}/server.dart');
   await entrypoint.writeAsString(
-    _entrypoint(
-      name: snake,
-      service: serviceName,
-      generated: generated,
-    ),
+    dependency == null
+        ? _entrypoint(
+            name: snake,
+            service: serviceName,
+            generated: generated,
+          )
+        : _entrypointWithDependency(
+            name: snake,
+            service: serviceName,
+            generated: generated,
+            dependency: dependency,
+          ),
   );
   written.add(entrypoint.path);
 
   final testFile = File('${test.path}/${snake}_service_test.dart');
   await testFile.writeAsString(
-    _test(
-      name: snake,
-      service: serviceName,
-      path: path,
-      generated: generated,
-    ),
+    dependency == null
+        ? _test(
+            name: snake,
+            service: serviceName,
+            path: path,
+            generated: generated,
+          )
+        : _testWithDependency(
+            name: snake,
+            service: serviceName,
+            path: path,
+            generated: generated,
+            dependency: dependency,
+          ),
   );
   written.add(testFile.path);
 
@@ -164,6 +241,10 @@ Future<ScaffoldResult> scaffoldService(
       description: 'The $snake service.',
       localWorkspace: localWorkspace,
       directory: directory,
+      dependency: dependency,
+      dependencyDirectory: dependency == null
+          ? null
+          : Directory('${directory.parent.path}/${dependency.name}'),
     ),
   );
   written.add(pubspec.path);
@@ -173,8 +254,12 @@ Future<ScaffoldResult> scaffoldService(
 
 /// Scaffolds the workspace [name] in [directory].
 ///
-/// The workspace holds the manifest and the first service, so the command
-/// gives a project that runs with `laska dev` right away.
+/// The workspace holds two services and the manifest that ties them together:
+/// the first service keeps the records, the second one calls it through the
+/// client of its contract and answers with a view of the records. The two
+/// services carry the tracing, the policy of the calls and their own tests, so
+/// the command gives a project that runs with `laska dev` right away and
+/// shows the whole path of the framework.
 Future<ScaffoldResult> scaffoldWorkspace(
   String name, {
   required Directory directory,
@@ -185,11 +270,30 @@ Future<ScaffoldResult> scaffoldWorkspace(
   final root = Directory('${directory.path}/$snake');
   await root.create(recursive: true);
 
+  final gateway = '${snake}_gateway';
+
   final service = await scaffoldService(
     snake,
     directory: Directory('${root.path}/services/$snake'),
     port: port,
     localWorkspace: localWorkspace,
+  );
+
+  final second = await scaffoldService(
+    gateway,
+    directory: Directory('${root.path}/services/$gateway'),
+    port: port + 1,
+    localWorkspace: localWorkspace,
+    dependency: ServiceDependency(
+      name: snake,
+      package: '${snake}_service',
+      generated: '$snake.pb.dart',
+      service: '${pascalCase(snake)}Service',
+      method: 'Get${pascalCase(_singular(snake))}',
+      requestType: 'Get${pascalCase(_singular(snake))}Request',
+      responseType: pascalCase(_singular(snake)),
+      entity: _singular(snake),
+    ),
   );
 
   final manifest = File('${root.path}/laska.yaml');
@@ -202,16 +306,27 @@ Future<ScaffoldResult> scaffoldWorkspace(
             entrypoint: 'services/$snake/bin/server.dart',
             port: port,
           ),
+          WorkspaceService(
+            name: gateway,
+            entrypoint: 'services/$gateway/bin/server.dart',
+            port: port + 1,
+            dependsOn: <String>[snake],
+          ),
         ],
       ),
     ),
   );
 
   return ScaffoldResult(
-    written: <String>[...service.written, manifest.path],
+    written: <String>[...service.written, ...second.written, manifest.path],
     manifest: manifest.path,
   );
 }
+
+/// The singular of the name [snake].
+String _singular(String snake) => snake.endsWith('s') && snake.length > 1
+    ? snake.substring(0, snake.length - 1)
+    : snake;
 
 /// Compiles the contract of the service and writes the generated code.
 Future<List<String>> _generate(
@@ -287,7 +402,11 @@ import 'generated/$generated';
 
 /// The implementation of the $service service.
 class ${service}Impl implements $service {
-  final Map<String, $responseType> _records = <String, $responseType>{};
+  final Map<String, $responseType> _records = <String, $responseType>{
+    // One record, so the service answers something on the first call. Replace
+    // the map with the table of your database.
+    'u_1': $responseType(id: 'u_1', name: 'A record'),
+  };
 
   @override
   Future<$responseType> $method($requestType request) async {
@@ -300,6 +419,54 @@ class ${service}Impl implements $service {
       );
     }
     return record;
+  }
+}
+''';
+
+/// The implementation of the scaffolded service that calls another service.
+///
+/// The client of the dependency comes from the contract of the dependency, so
+/// it carries the policy of the calls: the timeout, the retries, the circuit
+/// breaker and the bulkhead.
+String _serviceWithDependency({
+  required String service,
+  required String method,
+  required String requestType,
+  required String responseType,
+  required String generated,
+  required ServiceDependency dependency,
+}) =>
+    '''import 'package:laska_core/laska_core.dart';
+import 'package:${dependency.package}/generated/${dependency.generated}';
+
+import 'generated/$generated';
+
+/// The implementation of the $service service.
+class ${service}Impl implements $service {
+  ${service}Impl({required this.${dependency.name}});
+
+  /// The client of the service that keeps the records.
+  final ${dependency.service}Client ${dependency.name};
+
+  @override
+  Future<$responseType> $method($requestType request) async {
+    final record;
+    try {
+      record = await ${dependency.name}.${camelCase(dependency.method)}(
+        ${dependency.requestType}(id: request.id),
+      );
+    } on LaskaApiException catch (error) {
+      // The status of the service behind becomes the status of this service,
+      // so the caller sees what really happened.
+      throw HttpException(
+        error.statusCode,
+        error.statusCode == 404
+            ? 'The record "\${request.id}" was not found'
+            : 'The service behind is not available',
+        code: error.statusCode == 404 ? 'not_found' : 'dependency_error',
+      );
+    }
+    return $responseType(id: record.id, name: record.name);
   }
 }
 ''';
@@ -318,12 +485,56 @@ import '../lib/${name}_service.dart';
 Future<void> main(List<String> arguments) async {
   final app = Laska();
 
-  Observability.install(
+  await Observability.install(
     app,
     logger: Logger(service: '$name', version: '0.1.0'),
   );
 
   register$service(app, ${service}Impl());
+
+  await run(app, arguments: arguments);
+}
+''';
+
+/// The entrypoint of the scaffolded service that calls another service.
+String _entrypointWithDependency({
+  required String name,
+  required String service,
+  required String generated,
+  required ServiceDependency dependency,
+}) =>
+    '''import 'dart:io';
+
+import 'package:laska_core/laska_core.dart';
+import 'package:${dependency.package}/generated/${dependency.generated}';
+
+import '../lib/generated/$generated';
+import '../lib/${name}_service.dart';
+
+Future<void> main(List<String> arguments) async {
+  final app = Laska();
+
+  final observability = await Observability.install(
+    app,
+    logger: Logger(service: '$name', version: '0.1.0'),
+  );
+
+  // The address of the service that keeps the records. `laska dev` gives it
+  // to every service of the workspace.
+  final baseUrl = Platform.environment['${dependency.name.toUpperCase()}_URL'] ??
+      'http://127.0.0.1:8080';
+
+  register$service(
+    app,
+    ${service}Impl(
+      ${dependency.name}: ${dependency.service}Client(
+        baseUrl: baseUrl,
+        // The tracer of the service joins the trace of the caller, so the two
+        // services answer with one trace.
+        tracer: observability.tracer,
+      ),
+    ),
+  );
 
   await run(app, arguments: arguments);
 }
@@ -344,13 +555,132 @@ import '../lib/generated/$generated';
 import '../lib/${name}_service.dart';
 
 void main() {
-  test('an unknown record is reported as a problem document', () async {
+  test('the service answers with the record it keeps', () async {
     final app = Laska();
     register$service(app, ${service}Impl());
 
     final client = testClient(app);
 
     final response = await client.get('$path/u_1');
+    response.expectStatus(200);
+  });
+
+  test('an unknown record is reported as a problem document', () async {
+    final app = Laska();
+    register$service(app, ${service}Impl());
+
+    final client = testClient(app);
+
+    final response = await client.get('$path/missing');
+    response.expectStatus(404);
+  });
+}
+''';
+
+/// The test of the scaffolded service that calls another service.
+///
+/// The transport of the test answers the call of the dependency, so the test
+/// exercises the whole path without opening a socket.
+String _testWithDependency({
+  required String name,
+  required String service,
+  required String path,
+  required String generated,
+  required ServiceDependency dependency,
+}) =>
+    '''import 'package:laska_core/laska_core.dart';
+import 'package:laska_test/laska_test.dart';
+import 'package:${dependency.package}/generated/${dependency.generated}';
+import 'package:test/test.dart';
+
+import '../lib/generated/$generated';
+import '../lib/${name}_service.dart';
+
+void main() {
+  test('the service answers with the record of the service behind it',
+      () async {
+    final transport = TestTransport();
+    transport.enqueueResponse(
+      200,
+      body: <String, Object?>{'id': 'u_1', 'name': 'A record'},
+    );
+
+    final tracer = TestTracer();
+    final app = Laska();
+    await Observability.install(app, tracer: tracer);
+    register$service(
+      app,
+      ${service}Impl(
+        ${dependency.name}: ${dependency.service}Client(
+          baseUrl: 'http://localhost:8080',
+          transport: transport,
+          tracer: tracer,
+        ),
+      ),
+    );
+
+    final client = testClient(app);
+
+    final response = await client.get('$path/u_1');
+    response.expectStatus(200);
+
+    final body = response.json as Map<String, dynamic>;
+    expect(body['id'], 'u_1');
+    expect(body['name'], 'A record');
+  });
+
+  test('the call to the service behind belongs to the trace of the request',
+      () async {
+    final transport = TestTransport();
+    transport.enqueueResponse(
+      200,
+      body: <String, Object?>{'id': 'u_1', 'name': 'A record'},
+    );
+
+    final tracer = TestTracer();
+    final app = Laska();
+    await Observability.install(app, tracer: tracer);
+    register$service(
+      app,
+      ${service}Impl(
+        ${dependency.name}: ${dependency.service}Client(
+          baseUrl: 'http://localhost:8080',
+          transport: transport,
+          tracer: tracer,
+        ),
+      ),
+    );
+
+    final client = testClient(app);
+    await client.get('$path/u_1');
+
+    // The call to the service behind carries the trace of the request, so the
+    // two services answer with one trace.
+    expect(transport.requests.first.headers['traceparent'], isNotNull);
+  });
+
+  test('the status of the service behind becomes the status of this service',
+      () async {
+    final transport = TestTransport();
+    transport.enqueueResponse(404, body: <String, Object?>{'code': 'not_found'});
+
+    final tracer = TestTracer();
+    final app = Laska();
+    await Observability.install(app, tracer: tracer);
+    register$service(
+      app,
+      ${service}Impl(
+        ${dependency.name}: ${dependency.service}Client(
+          baseUrl: 'http://localhost:8080',
+          transport: transport,
+          tracer: tracer,
+        ),
+      ),
+    );
+
+    final client = testClient(app);
+
+    final response = await client.get('$path/missing');
     response.expectStatus(404);
   });
 }
@@ -362,6 +692,8 @@ String _pubspec({
   required String description,
   String? localWorkspace,
   Directory? directory,
+  ServiceDependency? dependency,
+  Directory? dependencyDirectory,
 }) {
   final overrides = <String, String>{};
 
@@ -374,6 +706,18 @@ String _pubspec({
         _pathDependency(localWorkspace, 'laska_test', directory);
   }
 
+  final dependencies = <String, String>{
+    'http': '^1.6.0',
+    'laska_core': '^0.1.0',
+  };
+
+  // The client of the service behind comes from the package of that service,
+  // so the service depends on it.
+  if (dependency != null && dependencyDirectory != null && directory != null) {
+    dependencies[dependency.package] =
+        '{path: ${relativePath(directory.absolute.path, dependencyDirectory.absolute.path)}}';
+  }
+
   final buffer = StringBuffer()
     ..writeln('name: $name')
     ..writeln('description: $description')
@@ -383,9 +727,11 @@ String _pubspec({
     ..writeln('environment:')
     ..writeln('  sdk: ^3.6.0')
     ..writeln()
-    ..writeln('dependencies:')
-    ..writeln('  http: ^1.6.0')
-    ..writeln('  laska_core: ^0.1.0')
+    ..writeln('dependencies:');
+  dependencies.forEach((key, value) {
+    buffer.writeln('  $key: $value');
+  });
+  buffer
     ..writeln()
     ..writeln('dev_dependencies:')
     ..writeln('  laska_contracts: ^0.1.0')

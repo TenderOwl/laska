@@ -6,6 +6,7 @@
 /// two versions of a contract are compatible.
 library;
 
+export 'src/compatibility.dart';
 export 'src/compile.dart';
 export 'src/diff.dart';
 export 'src/generator/dart_generator.dart';
@@ -15,3 +16,4 @@ export 'src/model.dart';
 export 'src/naming.dart';
 export 'src/parser.dart';
 export 'src/types.dart';
+export 'src/version.dart';

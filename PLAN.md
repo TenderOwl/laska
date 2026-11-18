@@ -627,7 +627,7 @@ Assume one developer at ~20 h/week. Sizes are rough.
 - [x] Restructure into a pub workspace; the legacy `lib/` moved out and then removed with `git rm`
       (history preserved).
 - [x] CI: `dart analyze`, `dart format --set-exit-if-changed`, `dart test` via `tool/check.dart`.
-- [ ] Commit/branch/lint policy; `CONTRIBUTING.md`; changelog process.
+- [x] Commit/branch/lint policy; `CONTRIBUTING.md`; changelog process.
 - [ ] Publish skeleton packages to pub.dev.
 
 **Done when:** `laska serve` boots an empty app; CI green on all three OSes. The runtime and the
@@ -732,13 +732,29 @@ manifest. The documentation lives in `docs/`.
 
 ### Phase 6 — Release hardening (8–12 days) → **v1.0**
 
-- [ ] Auth hardening: key rotation, JWKS support, session fixation defence, rate limiting.
-- [ ] Semver policy, upgrade guide, `laska upgrade` codemods.
-- [ ] Contract compatibility matrix, end-to-end example service published.
-- [ ] Performance pass on the hot path (buffer reuse, precomputed route tables, allocation budget).
+- [x] Auth hardening: key rotation, JWKS support, session fixation defence, rate limiting.
+- [x] Semver policy, upgrade guide, `laska upgrade` codemods.
+- [x] Contract compatibility matrix, end-to-end example service published.
+- [x] Performance pass on the hot path (buffer reuse, precomputed route tables, allocation budget).
 
 **Done when:** `laska new` produces a two-service workspace with contracts, generated clients,
 tracing, resilience and passing tests — this is **v1.0**.
+
+The phase is implemented in seven steps, each of them closed by the full validation of the
+repository (`dart format .` and `dart run tool/check.dart`):
+
+| Step | What it holds |
+|---|---|
+| 6.1 | The tokens (`HS`, `RS`, `ES`), the API keys, the principal and the middleware of the authentication. |
+| 6.2 | The JWKS, the rotation of the keys and `laska keys generate`. |
+| 6.3 | The sessions, the defence against the fixation of a session, and the rate limiting. |
+| 6.4 | The policy of the versions, the guide of the upgrade and `laska upgrade`. |
+| 6.5 | The matrix of the compatibility and the two-service workspace of `laska new`. |
+| 6.6 | The performance of the hot path: the tables of the router, the reuse of the buffers, the budget of the allocations and the benchmark. |
+| 6.7 | The guides, the plan, the readme and the changelog of the release. |
+
+The guides of the phase live in `docs/`: `auth.md`, `versioning.md`, `upgrading.md`,
+`compatibility.md` and `performance.md`.
 
 ### Totals
 
@@ -802,20 +818,18 @@ Resolve during the relevant phase, not now:
 ## 10. Immediate next steps
 
 Phase 1 (core runtime), Phase 2 (contract pipeline), Phase 3 (observability), Phase 4
-(inter-service calls and resilience) and Phase 5 (workspace and CLI maturity) are implemented. The
-next phase is Phase 6 — the release hardening — because the framework now covers the whole path
-from the contract to the running service, and the remaining gaps are the ones a v1.0 cannot have.
+(inter-service calls and resilience), Phase 5 (workspace and CLI maturity) and Phase 6 (release
+hardening) are implemented. The framework now covers the whole path from the contract to the running
+service, and the release hardening closed the gaps a v1.0 cannot have.
 
 1. **Publish the packages** — `laska_core`, `laska_contracts`, `laska_cli` and `laska_test` on
-   pub.dev, so a scaffolded project resolves its dependencies instead of a local workspace.
-2. **Auth hardening** — key rotation, JWKS support, the defence against the fixation of a session,
-   and the rate limiting.
-3. **The semver policy and the upgrade guide** — `laska upgrade` with the codemods of the breaking
-   changes of the runtime.
-4. **The compatibility matrix of the contracts** — what a service of one version accepts from a
-   client of another version.
-5. **The performance pass on the hot path** — the reuse of the buffers, the route tables that are
-   computed once, the budget of the allocations.
+   pub.dev, so a scaffolded project resolves its dependencies instead of a local workspace. This is
+   the first thing that stands between the repository and the v1.0.
+2. **The SDKs of the other languages** — the generator writes the Dart client today; the Go client
+   comes first, then the Python, the TypeScript and the PHP ones. Every SDK is generated from the
+   same contract, so the clients of a service agree with each other by construction.
+3. **The gRPC server side** — the runtime speaks gRPC to the services it calls, and the server side
+   of the contract is still missing.
 
 Deferred to v1.1: the `@injectable` codegen, the ORM adapters and the Redis and NATS backends.
 

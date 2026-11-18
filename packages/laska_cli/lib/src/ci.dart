@@ -9,11 +9,14 @@ library;
 ///
 /// The [proto] directory holds the contract, the [base] and the [candidate]
 /// directories hold the two versions of the contract when the project checks
-/// that the contract stays compatible.
+/// that the contract stays compatible, and the [matrix] directory holds one
+/// directory per version of the contract when the project writes the matrix of
+/// the versions.
 String renderCiRecipe({
   String proto = 'api',
   String? base,
   String? candidate,
+  String? matrix,
   String name = 'laska',
 }) {
   final buffer = StringBuffer()
@@ -48,6 +51,13 @@ String renderCiRecipe({
     buffer.writeln(
       '      - run: dart run laska_cli:laska contract diff '
       '--base $base --candidate $candidate',
+    );
+  }
+
+  if (matrix != null) {
+    buffer.writeln(
+      '      - run: dart run laska_cli:laska contract matrix '
+      '--dir $matrix --out matrix.md',
     );
   }
 

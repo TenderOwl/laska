@@ -10,8 +10,10 @@ ship it as a single binary.
   `/healthz`/`/readyz` — built into the runtime, not bolted on.
 - **Resilience**: timeouts, retries with jitter, circuit breaker, bulkhead and idempotency keys,
   with one consistent set of defaults across every service.
+- **Security**: JWT (HS/RS/ES), JWKS with the rotation of the keys, API keys, sessions with the
+  defence against the fixation, and the rate limiting — with the same `401`/`403` everywhere.
 - **DX**: `laska new service`, `laska dev` for a whole multi-service workspace, `laska contract
-  diff`, `laska migrate:run`.
+  diff`, `laska contract matrix`, `laska migrate:run`.
 
 The long-term design and the roadmap behind these points live in [PLAN.md](PLAN.md), and the guides
 live in [docs/](docs/README.md).
@@ -19,8 +21,9 @@ live in [docs/](docs/README.md).
 ## Current state
 
 Active development, **not for production use**. The core runtime, the contract pipeline, the
-observability layer, the resilience layer and the workspace tooling are implemented and working end
-to end (see below); the foreign-language SDKs and the release hardening are still to come.
+observability layer, the resilience layer, the workspace tooling and the release hardening are
+implemented and working end to end (see below); the foreign-language SDKs and the publication of
+the packages are still to come.
 
 | Package | What it holds |
 |---|---|
@@ -289,18 +292,21 @@ final users = discovery.resolve('users'); // http://127.0.0.1:8080
 ## The command line interface
 
 ```
-laska new <name>          # scaffold a workspace with a first service
+laska new <name>          # scaffold a workspace with two services
 laska new service <name>  # scaffold a service inside a workspace
 laska contract compile   --proto <dir> --out <dir> [--title <t>] [--version <v>]
 laska contract diff      --base <dir> --candidate <dir> [--quiet]
 laska contract lint      --proto <dir>
+laska contract matrix    [--dir <dir>] [--version <dir>] [--out <file>] [--details]
+laska keys generate      --alg <alg> --out <dir> [--kid <kid>] [--bits <n>]
+laska upgrade            [--api <name> --from <v> --to <v>] [--path <dir>] [--dry-run]
 laska serve              [--entrypoint <file>] [--workers <n>] [--address <addr>] [--port <port>]
 laska dev                [--manifest <file>] [--entrypoint <file>] [--collector-port <port>]
 laska route:list         [--entrypoint <file>]
 laska migrate:run        [--entrypoint <file>] [--directory <dir>]
 laska deploy:dockerfile  [--manifest <file>] [--out <dir>] [--image <repo>]
 laska deploy:k8s         [--manifest <file>] [--out <dir>] [--namespace <ns>]
-laska ci:recipe          [--out <file>] [--proto <dir>] [--base <dir>] [--candidate <dir>]
+laska ci:recipe          [--out <file>] [--proto <dir>] [--base <dir>] [--candidate <dir>] [--matrix <dir>]
 ```
 
 `laska serve` runs the supervisor: it starts the worker processes of the service, shares the port
@@ -309,8 +315,16 @@ prints the route table of the service, and `laska migrate:run` applies the pendi
 
 `laska new service` writes a service that runs: the contract, the generated code, the
 implementation, the entrypoint and a test, and it adds the service to the manifest of the
-workspace. `laska deploy:dockerfile` and `laska deploy:k8s` write the images and the manifests of
-the cluster from that manifest, and `laska ci:recipe` writes the workflow of the pipeline.
+workspace. `laska new <name>` writes a whole workspace with two services: the first one keeps the
+records and the second one calls it through the typed client of its contract, so the project shows
+the whole path of the framework. `laska deploy:dockerfile` and `laska deploy:k8s` write the images
+and the manifests of the cluster from that manifest, and `laska ci:recipe` writes the workflow of
+the pipeline.
+
+`laska contract matrix` compares every version of a contract with every other one and tells which
+client works against which server. `laska keys generate` writes the keys that sign the tokens of the
+service — the private key in a file of its own, the public key set next to it — and `laska upgrade`
+moves a service to a new version of the framework or of its own API.
 
 Every command has a help of its own. `laska --help` lists the commands, the global options and the
 environment variables of the telemetry, and `laska help <command>` describes one command with its
@@ -373,6 +387,73 @@ app.group('/v1', (group) {
   second; `Logger` writes one JSON object per line and redacts the secrets.
 - **Data** — `Database` over `package:postgres` and `package:sqlite3`, with SQL migrations applied
   by `laska migrate:run` and recorded in a `schema_migrations` ledger.
+
+## Authentication
+
+The three ways a service is called in practice are middleware of the runtime:
+
+```dart
+final verifier = JwtVerifier(keys: <JwtKey>[key]);
+
+app.use(jwtMiddleware(verifier));          // Authorization: Bearer <token>
+app.use(apiKeyMiddleware(guard));          // x-api-key: <key>
+app.use(sessionMiddleware(store));         // Cookie: laska_session=<id>
+app.use(rateLimitMiddleware(limiter));     // 429 and a retry-after
+```
+
+The caller lands in `ctx.request.principal`, so a handler never reads the headers itself. The
+runtime does not trust the header of a token: the algorithm of the token has to be the algorithm of
+the key that signed it, so `alg: none` and the confusion of the algorithms are refused. The keys of
+the service are published as a JWKS, and the cache of the key set refreshes it when a token names a
+key it does not know — never more than once every ten seconds, so a flood of made-up `kid`s cannot
+turn the service into a client of itself.
+
+`laska keys generate` writes the keys of the service: the private key in a file of its own and the
+public key set next to it.
+
+The id of a session is regenerated when the privileges of the session change, so an id that leaked
+before the login is dead afterwards.
+
+See [the guide of the authentication](docs/auth.md).
+
+## The versions of a contract
+
+A contract that breaks its consumers goes to the next major version of its API, and the diff says so
+in the pipeline:
+
+```console
+$ dart run laska_cli:laska contract diff --base contracts/v1 --candidate contracts/v2
+BREAKING  users.v1.User.email: field was removed
+```
+
+When a contract has more than two versions, the matrix compares every version with every other one
+and tells which client works against which server:
+
+```console
+$ dart run laska_cli:laska contract matrix --dir contracts
+client \ server  v1      v2
+v1               yes     yes*
+v2               yes*    yes
+```
+
+`laska upgrade --api users --from v1 --to v2` moves the contract, the generated code and the calls
+of the service to the new version together.
+
+See [the guide of the versions](docs/versioning.md) and [the guide of the matrix](docs/compatibility.md).
+
+## The performance of the hot path
+
+The tables of the router are built when a route is registered, the chain of the middleware of a route
+is built once and kept, and the body of a request is read into a buffer that comes from a pool. The
+budget of the hot path is a number of objects per request, and the tests hold the runtime to it.
+
+```console
+$ dart run tool/benchmark.dart
+router: a static route                  0.09 us/op     11363636 op/s
+dispatch: a static route                3.72 us/op      268504 op/s
+```
+
+See [the guide of the performance](docs/performance.md).
 
 ## Testing a service
 

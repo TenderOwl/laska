@@ -6,8 +6,10 @@ import 'package:laska_cli/src/ci.dart';
 import 'package:laska_cli/src/collector.dart';
 import 'package:laska_cli/src/deploy.dart';
 import 'package:laska_cli/src/help.dart';
+import 'package:laska_cli/src/keys.dart';
 import 'package:laska_cli/src/parser.dart';
 import 'package:laska_cli/src/scaffold.dart';
+import 'package:laska_cli/src/upgrade.dart';
 import 'package:laska_cli/src/workspace.dart';
 import 'package:laska_core/laska_core.dart';
 import 'package:laska_contracts/laska_contracts.dart';
@@ -112,6 +114,10 @@ class _Cli {
         await _dockerfile(command);
       case 'deploy:k8s':
         await _kubernetes(command);
+      case 'keys':
+        await _keys(command, help);
+      case 'upgrade':
+        await _upgrade(command, help);
       default:
         out.write(help.root());
         code = 64;
@@ -164,10 +170,89 @@ class _Cli {
         await _diff(subcommand);
       case 'lint':
         await _lint(subcommand);
+      case 'matrix':
+        await _matrix(subcommand);
       default:
         err.writeln('Unknown subcommand "${subcommand.name}".');
         code = 64;
     }
+  }
+
+  /// Writes the matrix of the versions of a contract.
+  ///
+  /// The matrix tells which client of which version works against which
+  /// server of which version, so a release does not break a consumer that
+  /// still runs.
+  Future<void> _matrix(ArgResults options) async {
+    final directories = <String, String>{};
+
+    for (final directory in options.multiOption('version')) {
+      directories[_labelOf(directory)] = directory;
+    }
+
+    final root = options.option('dir');
+    if (root != null) {
+      final directory = Directory(root);
+      if (!directory.existsSync()) {
+        err.writeln('The directory "$root" does not exist.');
+        code = 66;
+        return;
+      }
+      final children = directory.listSync().whereType<Directory>().toList()
+        ..sort((left, right) =>
+            _labelOf(left.path).compareTo(_labelOf(right.path)));
+      for (final child in children) {
+        directories.putIfAbsent(_labelOf(child.path), () => child.path);
+      }
+    }
+
+    if (directories.length < 2) {
+      err.writeln(
+        'The matrix needs at least two versions of the contract. Pass '
+        '--version for each of them, or --dir for a directory holding one '
+        'directory per version.',
+      );
+      code = 64;
+      return;
+    }
+
+    final versions = <String, Contract>{};
+    for (final entry in directories.entries) {
+      try {
+        versions[entry.key] = await _loadContract(entry.value);
+      } on StateError catch (error) {
+        err.writeln(error.message);
+        code = 66;
+        return;
+      }
+    }
+
+    final matrix = buildCompatibilityMatrix(versions);
+
+    out.write(matrix.table());
+
+    if (options.flag('details')) {
+      out.writeln();
+      out.write(matrix.details());
+    }
+
+    final output = options.option('out');
+    if (output != null) {
+      final file = File(output);
+      await file.parent.create(recursive: true);
+      await file.writeAsString(matrix.markdown());
+      out.writeln('written: ${file.path}');
+    }
+  }
+
+  /// The label of a version of a contract, taken from its directory.
+  String _labelOf(String path) {
+    final normalized = path.replaceAll('\\', '/');
+    final separator = normalized.lastIndexOf('/');
+    if (separator == -1) {
+      return normalized;
+    }
+    return normalized.substring(separator + 1);
   }
 
   /// Checks the contract against the rules of the framework.
@@ -216,6 +301,7 @@ class _Cli {
         proto: options.option('proto')!,
         base: options.option('base'),
         candidate: options.option('candidate'),
+        matrix: options.option('matrix'),
       ),
     );
 
@@ -292,9 +378,52 @@ class _Cli {
       'change(s).',
     );
 
+    final problem = _versionProblem(base, candidate, diff);
+    if (problem != null) {
+      err.writeln();
+      err.writeln(problem);
+      code = 1;
+    }
+
     if (diff.hasBreakingChanges) {
       code = 1;
     }
+  }
+
+  /// The problem with the version of the API of the candidate, if any.
+  ///
+  /// The policy of the versions says: a breaking change goes to the next
+  /// major version of the API, and a change that breaks nobody stays in the
+  /// version it is in.
+  String? _versionProblem(
+    Contract base,
+    Contract candidate,
+    ContractDiff diff,
+  ) {
+    final baseVersion = apiVersionOf(base);
+    final candidateVersion = apiVersionOf(candidate);
+    if (baseVersion == null || candidateVersion == null) {
+      return null;
+    }
+    if (baseVersion.name != candidateVersion.name) {
+      return null;
+    }
+
+    final required =
+        diff.hasBreakingChanges ? baseVersion.nextMajor : baseVersion;
+    if (candidateVersion.major == required.major) {
+      return null;
+    }
+
+    if (diff.hasBreakingChanges) {
+      return 'The contract has breaking changes, so the version of the API '
+          'must go from ${baseVersion.package} to ${required.package}, '
+          'but the candidate is ${candidateVersion.package}.';
+    }
+
+    return 'The contract has no breaking changes, so the version of the API '
+        'must stay ${baseVersion.package}, '
+        'but the candidate is ${candidateVersion.package}.';
   }
 
   Future<void> _serve(ArgResults options) async {
@@ -396,6 +525,151 @@ class _Cli {
     for (final path in written) {
       out.writeln('generated: $path');
     }
+  }
+
+  /// Generates a key of the service.
+  ///
+  /// The private key is written to a file of its own, and the key set of the
+  /// service is written next to it, so the service may publish the key set
+  /// and keep the private key to itself.
+  Future<void> _keys(ArgResults command, LaskaHelp help) async {
+    final subcommand = command.command;
+    if (subcommand == null) {
+      if (command.rest.isNotEmpty) {
+        err.writeln('Unknown subcommand "${command.rest.join(' ')}".');
+      } else {
+        err.writeln('Missing subcommand for "keys".');
+      }
+      out.write(help.command(<String>['keys'])!);
+      code = 64;
+      return;
+    }
+
+    if (subcommand.flag('help')) {
+      out.write(help.command(<String>['keys', subcommand.name!])!);
+      return;
+    }
+
+    if (subcommand.name != 'generate') {
+      err.writeln('Unknown subcommand "${subcommand.name}".');
+      code = 64;
+      return;
+    }
+
+    final name = subcommand.option('alg')!;
+    final algorithm = keyAlgorithmOf(name);
+    if (algorithm == null) {
+      err.writeln(
+        'The algorithm "$name" is not supported. Use one of rs256, rs384, '
+        'rs512, es256, es384, es512 or hs256.',
+      );
+      code = 64;
+      return;
+    }
+
+    final bits = int.tryParse(subcommand.option('bits') ?? '') ?? 2048;
+    if (bits < 1024) {
+      err.writeln('The size of the key of RSA must be at least 1024 bits.');
+      code = 64;
+      return;
+    }
+
+    final KeyGeneration result;
+    try {
+      result = generateKey(
+        directory: subcommand.option('out')!,
+        algorithm: algorithm,
+        kid: subcommand.option('kid'),
+        bits: bits,
+      );
+    } on KeyGenerationException catch (error) {
+      err.writeln(error.message);
+      code = 65;
+      return;
+    }
+
+    out.writeln('generated: ${result.privateKeyFile}');
+    out.writeln('generated: ${result.jwksFile}');
+    out.writeln();
+    out.writeln('Keep the private key to yourself and publish the key set.');
+  }
+
+  /// Moves the version of the API of the service.
+  ///
+  /// The version of the API lives in the name of the package of the contract
+  /// and in the paths of the REST projection, so the contract, the generated
+  /// code and the calls of the service follow the new version together.
+  Future<void> _upgrade(ArgResults options, LaskaHelp help) async {
+    final api = options.option('api');
+    final from = options.option('from');
+    final to = options.option('to');
+
+    if (from == null || to == null) {
+      err.writeln('The options --from and --to are required.');
+      out.write(help.command(<String>['upgrade'])!);
+      code = 64;
+      return;
+    }
+
+    if (api == null) {
+      await _upgradeFramework(options, from, to);
+      return;
+    }
+
+    if (from == to) {
+      err.writeln('The version of the API does not change.');
+      code = 64;
+      return;
+    }
+
+    final dryRun = options.flag('dry-run');
+    final result = await applyCodemods(
+      Directory(options.option('path')!),
+      <Codemod>[apiVersionCodemod(api: api, from: from, to: to)],
+      dryRun: dryRun,
+    );
+
+    for (final path in result.changedFiles) {
+      out.writeln('${dryRun ? 'would change' : 'changed'}: $path');
+    }
+    out.writeln();
+    out.writeln(
+      '${result.changedFiles.length} file(s) '
+      '${dryRun ? 'would change' : 'changed'}.',
+    );
+
+    if (dryRun && result.changedFiles.isNotEmpty) {
+      out.writeln('Nothing was written. Run the command without --dry-run.');
+    }
+  }
+
+  /// Moves the service to the version [to] of the framework.
+  Future<void> _upgradeFramework(
+    ArgResults options,
+    String from,
+    String to,
+  ) async {
+    final codemods = frameworkCodemodsBetween(from, to);
+    if (codemods.isEmpty) {
+      out.writeln('No codemod is needed to go from $from to $to.');
+      return;
+    }
+
+    final dryRun = options.flag('dry-run');
+    final result = await applyCodemods(
+      Directory(options.option('path')!),
+      codemods,
+      dryRun: dryRun,
+    );
+
+    for (final path in result.changedFiles) {
+      out.writeln('${dryRun ? 'would change' : 'changed'}: $path');
+    }
+    out.writeln();
+    out.writeln(
+      '${result.changedFiles.length} file(s) '
+      '${dryRun ? 'would change' : 'changed'}.',
+    );
   }
 
   /// Reads the manifest of the workspace.
@@ -640,6 +914,19 @@ class _Cli {
 
         final entrypoint = File(entrypoints[service.name]!);
 
+        if (!options.flag('no-pub-get')) {
+          final problem = await _resolveDependencies(entrypoint.path);
+          if (problem != null) {
+            err.writeln(
+              'The dependencies of the service "${service.name}" could not be '
+              'resolved:',
+            );
+            err.writeln(problem);
+            code = 69;
+            return;
+          }
+        }
+
         out.writeln(
           '=> ${service.name} on http://127.0.0.1:${service.port}',
         );
@@ -678,6 +965,37 @@ class _Cli {
       // the command returns.
       await collector?.stop();
     }
+  }
+
+  /// Resolves the dependencies of the service of the [entrypoint].
+  ///
+  /// The package of the service is the first directory above the entrypoint
+  /// that holds a `pubspec.yaml`. Returns the error of the command when the
+  /// dependencies could not be resolved, and `null` when they are.
+  Future<String?> _resolveDependencies(String entrypoint) async {
+    var directory = File(entrypoint).parent;
+
+    for (var depth = 0; depth < 4; depth++) {
+      if (File('${directory.path}/pubspec.yaml').existsSync()) {
+        final result = await Process.run(
+          Platform.resolvedExecutable,
+          <String>['pub', 'get'],
+          workingDirectory: directory.path,
+        );
+        if (result.exitCode != 0) {
+          return result.stderr.toString().trim();
+        }
+        return null;
+      }
+
+      final parent = directory.parent;
+      if (parent.path == directory.path) {
+        break;
+      }
+      directory = parent;
+    }
+
+    return null;
   }
 
   /// Resolves the entrypoint of the service.

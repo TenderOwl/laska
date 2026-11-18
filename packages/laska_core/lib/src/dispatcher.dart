@@ -18,6 +18,24 @@ class Dispatcher {
   /// The application the requests are dispatched to.
   final Laska app;
 
+  /// The chain of middleware of every route, built once and kept.
+  ///
+  /// The chain of a route only changes when the middleware of the application
+  /// or of one of its groups changes, so it is built again only then.
+  final Map<RouteInfo, List<Middleware>> _chains =
+      <RouteInfo, List<Middleware>>{};
+
+  /// The state of the middleware when the chain of a route was built.
+  final Map<RouteInfo, int> _states = <RouteInfo, int>{};
+
+  /// The number of times the chain of a route was built.
+  ///
+  /// The counter is a diagnostic of the hot path: the chain of a route is
+  /// built once and kept, so the counter only goes up when the middleware of
+  /// the service changed.
+  int get chainBuilds => _chainBuilds;
+  int _chainBuilds = 0;
+
   /// Handles [request] and returns the response.
   Future<Response> dispatch(Request request) async {
     try {
@@ -41,18 +59,20 @@ class Dispatcher {
         );
       }
 
-      final scoped = request.copyWith(params: match.params);
-      scoped.routePattern = match.route.path;
-      final context = Context(scoped, app);
+      final route = match.route;
+
+      // The parameters and the pattern of the route are written into the
+      // request, so the request is not copied for every call.
+      request.params = match.params;
+      request.routePattern = route.path;
+
+      final context = Context(request, app);
       return await _runChain(
-        <Middleware>[
-          ..._middlewareOf(match.route.app),
-          ...match.route.middleware,
-        ],
+        _chainOf(route),
         0,
-        scoped,
+        request,
         context,
-        match.route.handler,
+        route.handler,
       );
     } on HttpException catch (error) {
       return Response.problem(
@@ -77,6 +97,41 @@ class Dispatcher {
         error.toString(),
       );
     }
+  }
+
+  /// The chain of middleware of the [route], built once and kept.
+  ///
+  /// The chain is built again when the middleware of the application or of one
+  /// of its groups changed since it was built.
+  List<Middleware> _chainOf(RouteInfo route) {
+    final state = _stateOf(route.app);
+    final cached = _chains[route];
+    if (cached != null && _states[route] == state) {
+      return cached;
+    }
+
+    final chain = <Middleware>[
+      ..._middlewareOf(route.app),
+      ...route.middleware,
+    ];
+    _chainBuilds++;
+    _chains[route] = chain;
+    _states[route] = state;
+    return chain;
+  }
+
+  /// The state of the middleware of [app] and of its groups.
+  ///
+  /// The state changes when a middleware is added, so a chain that was built
+  /// before is not used any more.
+  static int _stateOf(Laska? app) {
+    var state = 0;
+    var current = app;
+    while (current != null) {
+      state = state * 31 + current.middleware.length;
+      current = current.parent;
+    }
+    return state;
   }
 
   Future<Response> _runChain(
