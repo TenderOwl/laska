@@ -1,6 +1,15 @@
 ## Unreleased
 
 - **The distribution of the framework:**
+  - **The packages of the framework are published on pub.dev** as `laska_core`,
+    `laska_contracts`, `laska_test` and `laska_cli`, version `0.1.0`. The command of
+    the line is installed with `dart pub global activate laska_cli`, and the release
+    `v0.1.0` of the repository holds the bundle of the command for Linux, macOS and
+    Windows, on x64 and on arm64.
+  - The publishing needs no secret in the repository: the token of pub.dev is a
+    temporary one, which GitHub signs for the audience of pub.dev with the permission
+    `id-token: write`. The first version of a package is published by hand, because
+    pub.dev only allows the automated publishing of the packages that already exist.
   - The packages of the workspace are ready for pub.dev: the metadata of the
     four packages, the `LICENSE`, the `README.md` and the `CHANGELOG.md` of each
     of them, and the `executables:` that names the command `laska`.

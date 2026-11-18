@@ -628,10 +628,11 @@ Assume one developer at ~20 h/week. Sizes are rough.
       (history preserved).
 - [x] CI: `dart analyze`, `dart format --set-exit-if-changed`, `dart test` via `tool/check.dart`.
 - [x] Commit/branch/lint policy; `CONTRIBUTING.md`; changelog process.
-- [ ] Publish skeleton packages to pub.dev.
+- [x] Publish skeleton packages to pub.dev.
 
-**Done when:** `laska serve` boots an empty app; CI green on all three OSes. The runtime and the
-CLI work; the packages are not published yet and the CI matrix only runs on the current platform.
+**Done when:** `laska serve` boots an empty app; CI green on all three OSes — **done**. The runtime
+and the CLI work, the four packages of the workspace are published on pub.dev as `0.1.0`, and the CI
+matrix runs on Linux, macOS and Windows.
 
 ### Phase 1 — Core runtime (12–18 days) — **done**
 
@@ -765,11 +766,11 @@ release `v0.1.0` is published, and the installers `tool/install.sh` and
 `tool/install.ps1` fetch the bundle of the platform and check its checksum before
 they unpack it.
 
-The packages of the workspace are published on pub.dev by the tag, without a
-secret in the repository: the token of pub.dev is a temporary one, which GitHub
-signs for the audience of pub.dev. The names of the four packages are free, and
-the first version of every package is published by hand — pub.dev only allows
-the automated publishing of the packages that already exist.
+The packages of the workspace are published on pub.dev as `laska_core`, `laska_contracts`,
+`laska_test` and `laska_cli`, version `0.1.0`. The first version of every package is published
+by hand — pub.dev only allows the automated publishing of the packages that already exist —
+and the later versions are published by the tag, without a secret in the repository: the
+token of pub.dev is a temporary one, which GitHub signs for the audience of pub.dev.
 
 ### Totals
 
