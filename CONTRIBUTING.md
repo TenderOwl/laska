@@ -90,16 +90,21 @@ The tag runs `.github/workflows/release.yml`, which:
 2. builds the bundle of the command line interface for Linux, macOS and
    Windows, on x64 and on arm64, and attaches the archives to the release of
    the repository with their checksums;
-3. runs the checks of the repository and publishes the packages on pub.dev —
-   the secret `PUB_TOKEN` holds the token of the publisher. Without the secret
-   the packages are not published and the binaries are built all the same.
+3. runs the checks of the repository and publishes the packages on pub.dev.
 
-The publishing on pub.dev can also be run on its own, without a tag, from
-`.github/workflows/publish.yml`: the publishing cannot be undone, and the
-packages are often published after the release is out.
+The publishing needs no secret in the repository: the token of pub.dev is a
+temporary one, which GitHub signs for the audience of pub.dev with the
+permission `id-token: write`. pub.dev only lets the packages publish
+themselves from the repository, so in the tab **Admin** of every package the
+publishing from GitHub Actions is enabled with the repository
+`TenderOwl/laska` and the pattern of the tags `v{{version}}`.
+
+The first version of a package is published by hand, because pub.dev only
+allows the automated publishing of the packages that already exist:
 
 ```console
-$ gh workflow run publish.yml
+$ dart pub login
+$ dart run tool/publish.dart --all
 ```
 
 The packages are published in the order of their dependencies, and the

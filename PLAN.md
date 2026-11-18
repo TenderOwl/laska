@@ -765,10 +765,11 @@ release `v0.1.0` is published, and the installers `tool/install.sh` and
 `tool/install.ps1` fetch the bundle of the platform and check its checksum before
 they unpack it.
 
-The packages of the workspace are published on pub.dev by the workflow
-`.github/workflows/publish.yml`, which is started by hand and reads the token of
-the publisher from the secret `PUB_TOKEN` of the repository. The names of the four
-packages are free, and the publication waits for that token.
+The packages of the workspace are published on pub.dev by the tag, without a
+secret in the repository: the token of pub.dev is a temporary one, which GitHub
+signs for the audience of pub.dev. The names of the four packages are free, and
+the first version of every package is published by hand — pub.dev only allows
+the automated publishing of the packages that already exist.
 
 ### Totals
 

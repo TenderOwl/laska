@@ -15,11 +15,15 @@ import 'dart:io';
 /// first, then `laska_contracts`, `laska_test` and `laska_cli`.
 ///
 /// The token of the publisher is read from the environment `PUB_TOKEN`, so a
-/// pipeline may publish without a person in the loop.
+/// pipeline may publish without a person in the loop. Without the token the
+/// command of the client uses the token that `dart pub login` has saved.
+///
+/// The flag `--force` answers the question of the client without a person:
+/// a pipeline has no terminal to answer it.
 ///
 /// Usage:
 ///   dart run tool/publish.dart --package laska_core [--dry-run]
-///   dart run tool/publish.dart --all [--dry-run]
+///   dart run tool/publish.dart --all [--dry-run] [--force]
 Future<void> main(List<String> arguments) async {
   final options = _Options.parse(arguments);
 
@@ -49,7 +53,11 @@ Future<void> main(List<String> arguments) async {
     final staged =
         _stage(directory, localDependencies: options.localDependencies);
     try {
-      final code = await _publish(staged, dryRun: options.dryRun);
+      final code = await _publish(
+        staged,
+        dryRun: options.dryRun,
+        force: options.force,
+      );
       if (code != 0) {
         stderr.writeln('FAILED: $package');
         exit(code);
@@ -74,6 +82,7 @@ class _Options {
     required this.dryRun,
     required this.allowDirty,
     required this.localDependencies,
+    required this.force,
   });
 
   /// The packages that were named one by one.
@@ -95,6 +104,11 @@ class _Options {
   /// workspace instead of the ones of pub.dev.
   final bool localDependencies;
 
+  /// Whether the question of the client is answered without a person.
+  ///
+  /// A pipeline has no terminal to answer it, so the answer is given here.
+  final bool force;
+
   /// Reads the options out of the [arguments].
   static _Options parse(List<String> arguments) {
     final packages = <String>[];
@@ -102,6 +116,7 @@ class _Options {
     var dryRun = false;
     var allowDirty = false;
     var localDependencies = false;
+    var force = false;
 
     for (var index = 0; index < arguments.length; index++) {
       final argument = arguments[index];
@@ -121,6 +136,8 @@ class _Options {
           allowDirty = true;
         case '--local-dependencies':
           localDependencies = true;
+        case '--force':
+          force = true;
         default:
           stderr.writeln('Unknown option "$argument".');
           exit(64);
@@ -133,6 +150,7 @@ class _Options {
       dryRun: dryRun,
       allowDirty: allowDirty,
       localDependencies: localDependencies,
+      force: force,
     );
   }
 }
@@ -232,11 +250,17 @@ String _relative(Directory directory, File file) {
 }
 
 /// Runs `dart pub publish` in the [directory].
-Future<int> _publish(Directory directory, {required bool dryRun}) async {
+Future<int> _publish(
+  Directory directory, {
+  required bool dryRun,
+  required bool force,
+}) async {
   final arguments = <String>[
     'pub',
     'publish',
     if (dryRun) '--dry-run',
+    // The client refuses the dry run and the force together.
+    if (force && !dryRun) '--force',
   ];
 
   final process = await Process.start(

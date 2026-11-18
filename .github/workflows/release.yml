@@ -96,6 +96,11 @@ jobs:
     name: Publish the packages on pub.dev
     needs: check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # The token of pub.dev is a temporary one, which GitHub signs for the
+      # audience of pub.dev. There is no long lived secret in the repository.
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -109,21 +114,25 @@ jobs:
       - name: Run the checks of the repository
         run: dart run tool/check.dart
 
-      - name: Publish the packages
-        if: env.PUB_TOKEN != ''
-        env:
-          PUB_TOKEN: ${{ secrets.PUB_TOKEN }}
-        run: dart run tool/publish.dart --all
+      - name: Take the token of pub.dev
+        id: token
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('https://pub.dev');
+            core.setSecret(token);
+            core.setOutput('token', token);
 
-      - name: Say that the packages are not published
-        if: env.PUB_TOKEN == ''
+      - name: Publish the packages
+        env:
+          PUB_TOKEN: ${{ steps.token.outputs.token }}
         run: |
-          echo "The secret PUB_TOKEN is not set, so the packages are not published."
-          echo "The binaries of the release are built all the same."
+          dart pub token add https://pub.dev --env-var=PUB_TOKEN
+          dart run tool/publish.dart --all --force
 
   release:
     name: Open the release
-    needs: [check, binaries, publish]
+    needs: [check, binaries]
     runs-on: ubuntu-latest
     steps:
       # The command of the GitHub CLI reads the tag from the repository, so the
