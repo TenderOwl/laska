@@ -162,7 +162,8 @@ message User {
         '${workspace.path}/go',
       ]);
 
-      expect(result.code, isNot(0));
+      expect(result.code, 64);
+      expect(result.err, contains('not an allowed value'));
     });
 
     test('fails on a directory without a contract', () async {

@@ -512,8 +512,9 @@ go $goLanguageVersion
         writer.write('packed := wire.NewWriter()');
         writer.write('for _, value := range m.$fieldName {');
         writer.indent();
-        writer
-            .write('packed.${encoding.rawWriter}(${encoding.write('value')})');
+        writer.write(
+          'packed.${encoding.rawWriter}(${_rawValueOf(field.type, 'value')})',
+        );
         writer.dedent();
         writer.write('}');
         writer.write('w.WriteBytes($number, packed.Bytes())');
@@ -1100,7 +1101,11 @@ go $goLanguageVersion
     );
     writer.write('if err != nil {');
     writer.indent();
-    writer.write('return nil, statusErrorOf(err)');
+    if (response.isEnum) {
+      writer.write('return ${response.name}(0), statusErrorOf(err)');
+    } else {
+      writer.write('return nil, statusErrorOf(err)');
+    }
     writer.dedent();
     writer.write('}');
 
@@ -1108,7 +1113,7 @@ go $goLanguageVersion
       writer.write('number, err := wire.ReadRawVarint(raw)');
       writer.write('if err != nil {');
       writer.indent();
-      writer.write('return nil, err');
+      writer.write('return ${response.name}(0), err');
       writer.dedent();
       writer.write('}');
       writer.write('return ${response.name}(int32(number)), nil');
@@ -1793,6 +1798,27 @@ _GoEncoding _encodingOf(String protoType) {
 }
 
 String _identity(String expression) => expression;
+
+/// The code that writes the value of a packed field.
+///
+/// A packed field holds the values one after the other, and every value goes
+/// out without a tag of its own. A number of 32 bits is written the way
+/// protobuf writes it: a negative number takes ten bytes.
+String _rawValueOf(String protoType, String expression) {
+  switch (protoType) {
+    case 'int32':
+      return 'uint64(int64($expression))';
+    case 'int64':
+    case 'uint32':
+      return 'uint64($expression)';
+    case 'sfixed32':
+      return 'uint32($expression)';
+    case 'sfixed64':
+      return 'uint64($expression)';
+    default:
+      return expression;
+  }
+}
 
 String _toUint32(String expression) => 'uint32($expression)';
 

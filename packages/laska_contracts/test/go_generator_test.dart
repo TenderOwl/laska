@@ -75,8 +75,35 @@ message DeleteUserRequest {
 }
 ''';
 
+const String _edgeSource = '''
+syntax = "proto3";
+
+package edge.v1;
+
+// EdgeService exercises the corners of the wire format.
+service EdgeService {
+  // Role answers with an enum.
+  rpc Role(EdgeRequest) returns (EdgeRole);
+}
+
+message EdgeRequest {
+  // The numbers of the call.
+  repeated int32 numbers = 1;
+
+  // The count of the call.
+  sint64 count = 2;
+}
+
+enum EdgeRole {
+  EDGE_ROLE_UNSPECIFIED = 0;
+}
+''';
+
 Contract _contract() => ContractCompiler()
     .build(<ProtoSource>[ProtoSource('users.proto', _source)]);
+
+Contract _edgeContract() => ContractCompiler()
+    .build(<ProtoSource>[ProtoSource('edge.proto', _edgeSource)]);
 
 List<GeneratedFile> _generate({String module = 'example.com/laska/users'}) =>
     GoGenerator(_contract(), module: module).generate();
@@ -257,6 +284,41 @@ void main() {
       expect(source, contains('type CallOptions struct {'));
       expect(source, contains('Timeout time.Duration'));
       expect(source, contains('Metadata map[string]string'));
+    });
+
+    test('holds the failure of a call with the status of the service', () {
+      final files = _generate();
+      final source = _fileOf(files, 'client.go');
+
+      expect(source, contains('type StatusError struct {'));
+      expect(source, contains('Code int'));
+      expect(source, contains('Message string'));
+      expect(source, contains('StatusNotFound = 5'));
+      expect(source, contains('func statusErrorOf(err error) error {'));
+    });
+  });
+
+  group('The Go SDK of the corners of the wire format', () {
+    test('writes the values of a packed field the way protobuf writes them',
+        () {
+      final files =
+          GoGenerator(_edgeContract(), module: 'example.com/laska/edge')
+              .generate();
+      final source = _fileOf(files, 'edge.pb.go');
+
+      // A number of 32 bits that is negative takes ten bytes on the wire.
+      expect(source, contains('packed.WriteRawVarint(uint64(int64(value)))'));
+      expect(source, contains('w.WriteSint64(2, m.Count)'));
+    });
+
+    test('answers with the value of an enum when the call fails', () {
+      final files =
+          GoGenerator(_edgeContract(), module: 'example.com/laska/edge')
+              .generate();
+      final source = _fileOf(files, 'edge_client.pb.go');
+
+      expect(source, contains('return EdgeRole(0), statusErrorOf(err)'));
+      expect(source, contains('return EdgeRole(int32(number)), nil'));
     });
   });
 }
