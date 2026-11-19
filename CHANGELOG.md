@@ -1,5 +1,21 @@
 ## Unreleased
 
+- **The SDK of a contract in Go.** A contract is not only a service of Dart: it
+  is the contract of every service that speaks it. The command `laska contract
+  sdk --lang=go` writes the SDK of a contract in Go, and the SDK is a module of
+  its own.
+  - The SDK holds the messages of the contract with the codec of the protocol
+    buffers, the enums of the contract, the well-known types of the protocol
+    buffers and the clients of the services with one method per RPC.
+  - The SDK holds the runtime it needs: the codec of the wire and the transport
+    that talks to a service over gRPC. It depends on nothing but the standard
+    library of Go, so a service written in Go pulls no dependency of its own.
+  - The calls go over gRPC, the way the service answers on both transports, so
+    the SDK of a contract talks to a service of Laska and to a service of
+    another implementation of protobuf with the same code.
+  - A failure of a call keeps its status: `StatusError` holds the code of the
+    status and the message of the service.
+
 - **The well-known types of protobuf are types a contract may use.** A contract
   may hold the moment of a day, the span of time, a value of any type and the
   empty message: the types that protobuf defines for everybody. The parser

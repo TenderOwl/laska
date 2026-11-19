@@ -52,7 +52,7 @@ func (c *UsersServiceClient) GetUser(ctx context.Context, request *GetUserReques
 	}
 	raw, err := c.conn.Invoke(ctx, "/users.v1.UsersService/GetUser", request.MarshalProto(), options.Metadata)
 	if err != nil {
-		return nil, err
+		return nil, statusErrorOf(err)
 	}
 	response := &User{}
 	if err := response.UnmarshalProto(raw); err != nil {
@@ -74,7 +74,7 @@ func (c *UsersServiceClient) ListUsers(ctx context.Context, request *ListUsersRe
 	}
 	raw, err := c.conn.Invoke(ctx, "/users.v1.UsersService/ListUsers", request.MarshalProto(), options.Metadata)
 	if err != nil {
-		return nil, err
+		return nil, statusErrorOf(err)
 	}
 	response := &ListUsersResponse{}
 	if err := response.UnmarshalProto(raw); err != nil {
@@ -96,7 +96,7 @@ func (c *UsersServiceClient) CreateUser(ctx context.Context, request *CreateUser
 	}
 	raw, err := c.conn.Invoke(ctx, "/users.v1.UsersService/CreateUser", request.MarshalProto(), options.Metadata)
 	if err != nil {
-		return nil, err
+		return nil, statusErrorOf(err)
 	}
 	response := &User{}
 	if err := response.UnmarshalProto(raw); err != nil {

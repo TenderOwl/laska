@@ -421,6 +421,7 @@ class LaskaHelp {
   /// The example invocations of the CLI.
   List<String> _examples() => const <String>[
         'laska contract compile --proto api --out lib/generated',
+        'laska contract sdk --lang=go --proto api --out go',
         'laska contract diff --base api-v1 --candidate api-v2',
         'laska route:list --entrypoint bin/server.dart',
         'laska migrate:run --entrypoint bin/server.dart',

@@ -1100,7 +1100,7 @@ go $goLanguageVersion
     );
     writer.write('if err != nil {');
     writer.indent();
-    writer.write('return nil, err');
+    writer.write('return nil, statusErrorOf(err)');
     writer.dedent();
     writer.write('}');
 
@@ -1151,8 +1151,42 @@ go $goLanguageVersion
     _writeHeader(writer, null);
     writer.write('package $packageName');
     writer.blank();
-    writer.write('import "time"');
+    writer.write('import (');
+    writer.indent();
+    writer.write('"errors"');
+    writer.write('"fmt"');
+    writer.write('"time"');
     writer.blank();
+    writer.write('"$module/internal/grpc"');
+    writer.dedent();
+    writer.write(')');
+    writer.blank();
+
+    writer.write('// The codes of the status of a call, as gRPC defines them.');
+    writer.write('const (');
+    writer.indent();
+    writer.write('// StatusOK is the status of a call that succeeded.');
+    writer.write('StatusOK = 0');
+    writer.write('// StatusInvalidArgument is the status of a call that was '
+        'malformed.');
+    writer.write('StatusInvalidArgument = 3');
+    writer
+        .write('// StatusDeadlineExceeded is the status of a call that ran out '
+            'of time.');
+    writer.write('StatusDeadlineExceeded = 4');
+    writer.write('// StatusNotFound is the status of a call that asked for '
+        'something that is not there.');
+    writer.write('StatusNotFound = 5');
+    writer.write('// StatusInternal is the status of a call that failed inside '
+        'the service.');
+    writer.write('StatusInternal = 13');
+    writer.write('// StatusUnavailable is the status of a call that could not '
+        'reach the service.');
+    writer.write('StatusUnavailable = 14');
+    writer.dedent();
+    writer.write(')');
+    writer.blank();
+
     writer.write('// CallOptions holds the options of a call to a service.');
     writer.write('type CallOptions struct {');
     writer.indent();
@@ -1166,6 +1200,51 @@ go $goLanguageVersion
     writer.dedent();
     writer.write('}');
     writer.blank();
+
+    writer.write(
+      '// StatusError is the failure of a call to a service.',
+    );
+    writer.write('type StatusError struct {');
+    writer.indent();
+    writer.write('// Code of the status, as gRPC defines it.');
+    writer.write('Code int');
+    writer.write('// Message of the status.');
+    writer.write('Message string');
+    writer.dedent();
+    writer.write('}');
+    writer.blank();
+    writer.write('// Error returns the message of the failure.');
+    writer.write('func (e *StatusError) Error() string {');
+    writer.indent();
+    writer.write(
+      'return fmt.Sprintf("the call failed with the status %d: %s", '
+      'e.Code, e.Message)',
+    );
+    writer.dedent();
+    writer.write('}');
+    writer.blank();
+
+    writer.write(
+      '// statusErrorOf turns the failure of the transport into the failure of '
+      'the',
+    );
+    writer.write(
+      '// service, so a caller may read the status of the call.',
+    );
+    writer.write('func statusErrorOf(err error) error {');
+    writer.indent();
+    writer.write('var status *grpc.Status');
+    writer.write('if errors.As(err, &status) {');
+    writer.indent();
+    writer.write(
+        'return &StatusError{Code: status.Code, Message: status.Message}');
+    writer.dedent();
+    writer.write('}');
+    writer.write('return err');
+    writer.dedent();
+    writer.write('}');
+    writer.blank();
+
     return writer.text;
   }
 

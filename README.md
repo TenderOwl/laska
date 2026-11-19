@@ -22,8 +22,9 @@ live in [docs/](docs/README.md).
 
 Active development, **not for production use**. The core runtime, the contract pipeline, the
 observability layer, the resilience layer, the workspace tooling and the release hardening are
-implemented and working end to end (see below); the foreign-language SDKs are still to come. The
-packages of the framework are published on pub.dev.
+implemented and working end to end (see below); the SDK of a contract in Go is written as well, and
+the SDKs of PHP, Python and TypeScript are still to come. The packages of the framework are
+published on pub.dev.
 
 | Package | What it holds |
 |---|---|
@@ -153,6 +154,17 @@ final client = UsersServiceClient(baseUrl: 'http://127.0.0.1:8080');
 final user = await client.getUser(const GetUserRequest(id: 'u_1'));
 
 print(user.email); // ada@example.com
+```
+
+The contract is not only a service of Dart: `laska contract sdk --lang=go` writes the SDK of the
+contract in Go — the messages, the clients of the services and the runtime they need — and the SDK
+talks to the service over gRPC:
+
+```go
+client, err := users.NewUsersServiceClient("localhost:50051")
+user, err := client.GetUser(ctx, &users.GetUserRequest{Id: "u_1"})
+
+print(user.Email) // ada@example.com
 ```
 
 ### 5. Keep the contract honest in CI

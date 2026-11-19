@@ -680,14 +680,18 @@ as specified, with tests — **done**. The behaviour is pinned by 102 tests in
 - [x] `laska contract diff` with Buf-compatible breaking-change rules.
 - [x] Generated code formatted with `package:dart_style` (also a syntax check).
 - [x] Drift check: the example fails if the checked-in generated code is out of date.
-- [ ] Foreign-language client generation (`--lang=go` first, then PHP/Python/TS).
+- [x] Foreign-language client generation: `laska contract sdk --lang=go` writes the SDK of
+      a contract in Go — the messages of the contract, the clients of its services and the
+      runtime they need. The SDK is a module of its own, it depends on nothing but the
+      standard library of Go, and it talks to a service over gRPC. PHP, Python and
+      TypeScript are next.
 - [x] Binary protobuf codec and the gRPC transport (client side — done in Phase 4).
 - [x] The gRPC server: the runtime serves the methods of a contract, and the generated code
       registers the service of a contract over gRPC next to its REST projection.
 
 **Done when:** one `.proto` produces a working REST endpoint, a gRPC endpoint, a Dart client, an
-OpenAPI document and a CI check that fails on a breaking change — **done**; the foreign-language
-SDKs are what is left.
+OpenAPI document and a CI check that fails on a breaking change — **done**; the SDK of the contract
+in Go is done as well, and the SDKs of PHP, Python and TypeScript are what is left.
 
 
 ### Phase 3 — Observability (10–14 days) — **done**

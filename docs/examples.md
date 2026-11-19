@@ -43,6 +43,13 @@ The example serves the contract on both transports: the REST projection on the
 port 8080 and the methods of the contract on the port 50051. Its test calls the
 service over HTTP and over gRPC and checks that the answers are the same.
 
+The example holds the SDK of the contract in Go under `go/`: the messages of the
+contract, the clients of its services and the runtime they need. Its tests run
+the toolchain of Go — the codec of the wire, the messages and the client
+against a server that speaks gRPC — and the test of the example starts the
+service and calls it with the client of Go, so the two languages talk to each
+other.
+
 The guide of the contracts is [contracts.md](contracts.md).
 
 ## The authentication of the callers

@@ -363,3 +363,73 @@ A service that does not want to answer over gRPC says so:
 ```dart
 registerUsersService(app, UsersServiceImpl(), grpc: false);
 ```
+
+## The SDK of the contract in another language
+
+A contract is not only a service of Dart: it is the contract of every service
+that speaks it. The command `laska contract sdk` writes the SDK of a contract
+in another language, and the SDK is a module of its own:
+
+```console
+$ dart run laska_cli:laska contract sdk --lang=go --proto api --out go \
+    --module example.com/laska/users
+generated: go/go.mod
+generated: go/internal/wire/wire.go
+generated: go/internal/grpc/grpc.go
+generated: go/wellknown.pb.go
+generated: go/client.go
+generated: go/users.pb.go
+generated: go/users_client.pb.go
+```
+
+The SDK of Go holds:
+
+- the messages of the contract, with the codec of the protocol buffers: a
+  message goes on the wire with `MarshalProto` and comes back with
+  `UnmarshalProto`;
+- the enums of the contract, which are numbers of 32 bits with the names of
+  their values;
+- the well-known types of the protocol buffers, with the names they have in
+  every language: `ProtoTimestamp`, `ProtoDuration`, `ProtoAny` and
+  `ProtoEmpty`;
+- the clients of the services of the contract, with one method per RPC;
+- the runtime the clients need: the codec of the wire and the transport that
+  talks to a service over gRPC.
+
+The SDK depends on nothing but the standard library of Go, so a service written
+in Go pulls no dependency of its own:
+
+```go
+client, err := users.NewUsersServiceClient(
+  "localhost:50051",
+  users.CallOptions{Timeout: 2 * time.Second},
+)
+if err != nil {
+  return err
+}
+defer client.Close()
+
+user, err := client.GetUser(ctx, &users.GetUserRequest{Id: "u_1"})
+if err != nil {
+  var status *users.StatusError
+  if errors.As(err, &status) {
+    return fmt.Errorf("the service answered with the status %d", status.Code)
+  }
+  return err
+}
+```
+
+The calls of the client go over gRPC, the way the service answers on both
+transports: the SDK of a contract talks to a service of Laska and to a service
+of another implementation of protobuf with the same code.
+
+The name of the Go package of the SDK is the last part of the path of the
+module, and `--package` names another one:
+
+```console
+$ dart run laska_cli:laska contract sdk --lang=go --proto api --out go \
+    --module example.com/laska/users --package users
+```
+
+The languages that follow are PHP, Python and TypeScript.
+

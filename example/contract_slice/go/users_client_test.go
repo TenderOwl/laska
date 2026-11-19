@@ -3,6 +3,7 @@ package users
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -140,8 +141,16 @@ func TestTheClientReportsTheFailureOfACall(t *testing.T) {
 	if err == nil {
 		t.Fatal("the call of the method that is not known succeeds")
 	}
-	if !strings.Contains(err.Error(), "12") {
-		t.Fatalf("the failure of the call is %q, want it to hold the status 12", err)
+
+	var status *StatusError
+	if !errors.As(err, &status) {
+		t.Fatalf("the failure of the call is %q, want it to be a status", err)
+	}
+	if status.Code != 12 {
+		t.Fatalf("the status of the failure is %d, want 12", status.Code)
+	}
+	if !strings.Contains(status.Message, "not known") {
+		t.Fatalf("the message of the failure is %q, want it to hold the reason", status.Message)
 	}
 }
 
