@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The SDK of a contract in Go: `GoGenerator` writes a module of its own that
+  holds the messages of the contract, the clients of its services and the
+  runtime they need, so a service written in Go depends on nothing but the
+  standard library of the language. The messages are written on the wire the
+  way protobuf writes them, and the clients talk to a service over gRPC.
 - The well-known types of protobuf are types a contract may use: the moment of
   a day, the span of time, a value of any type and the empty message. They are
   compiled into the types of the runtime — `ProtoTimestamp`, `ProtoDuration`,

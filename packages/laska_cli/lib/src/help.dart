@@ -43,6 +43,20 @@ const Map<String, CommandHelp> commandHelp = <String, CommandHelp>{
       'laska contract compile --proto api --out lib/generated',
     ],
   ),
+  'contract sdk': CommandHelp(
+    summary: 'Generate the SDK of a contract in another language.',
+    description:
+        'Reads the .proto files of the directory, validates the contract and '
+        'writes the SDK of the contract in the language given with --lang. The '
+        'SDK is a module of its own: it holds the messages of the contract, the '
+        'clients of its services and the runtime they need, so a service '
+        'written in that language depends on nothing but its standard library.',
+    examples: <String>[
+      'laska contract sdk --lang=go --proto api --out go',
+      'laska contract sdk --lang=go --proto api --out go '
+          '--module example.com/laska/users',
+    ],
+  ),
   'contract diff': CommandHelp(
     summary: 'Compare two contracts and report the breaking changes.',
     description:

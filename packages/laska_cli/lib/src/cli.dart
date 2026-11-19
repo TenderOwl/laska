@@ -167,6 +167,8 @@ class _Cli {
     switch (subcommand.name) {
       case 'compile':
         await _compile(subcommand);
+      case 'sdk':
+        await _sdk(subcommand);
       case 'diff':
         await _diff(subcommand);
       case 'lint':
@@ -348,6 +350,53 @@ class _Cli {
     }
     out.writeln(
       '${result.files.length} Dart file(s) and openapi.json written to '
+      '"$outputDirectory".',
+    );
+  }
+
+  /// Writes the SDK of a contract in another language.
+  Future<void> _sdk(ArgResults options) async {
+    final language = options.option('lang')!;
+    final protoDirectory = options.option('proto')!;
+    final outputDirectory = options.option('out')!;
+
+    final sources = await readProtoDirectory(protoDirectory);
+    if (sources.isEmpty) {
+      err.writeln('No .proto files found in "$protoDirectory".');
+      code = 66;
+      return;
+    }
+
+    final compiler = ContractCompiler();
+    final Contract contract;
+    try {
+      contract = compiler.build(sources);
+    } on ContractCompileException catch (error) {
+      err.writeln(error.toString());
+      code = 65;
+      return;
+    }
+
+    final List<GeneratedFile> files;
+    switch (language) {
+      case 'go':
+        files = GoGenerator(
+          contract,
+          module: options.option('module')!,
+          package: options.option('package'),
+        ).generate();
+      default:
+        err.writeln('Unknown language "$language".');
+        code = 64;
+        return;
+    }
+
+    final written = await writeFiles(files, outputDirectory);
+    for (final path in written) {
+      out.writeln('generated: $path');
+    }
+    out.writeln(
+      '${files.length} file(s) of the $language SDK written to '
       '"$outputDirectory".',
     );
   }

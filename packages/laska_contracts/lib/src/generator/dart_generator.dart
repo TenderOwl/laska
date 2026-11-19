@@ -5,18 +5,9 @@ import '../model.dart';
 import '../naming.dart';
 import '../types.dart';
 import '../well_known.dart';
+import 'file.dart';
 
-/// A file produced by a generator.
-class GeneratedFile {
-  /// Creates a generated file.
-  GeneratedFile(this.path, this.content);
-
-  /// Path of the file, relative to the output directory.
-  final String path;
-
-  /// Content of the file.
-  final String content;
-}
+export 'file.dart';
 
 /// Generates Dart code out of a [Contract].
 ///

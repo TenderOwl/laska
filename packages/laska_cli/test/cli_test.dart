@@ -114,6 +114,73 @@ message User {
     });
   });
 
+  group('laska contract sdk', () {
+    test('writes the SDK of the contract in Go', () async {
+      writeContract('proto', _contract);
+
+      final result = await _run(<String>[
+        'contract',
+        'sdk',
+        '--lang=go',
+        '--proto',
+        '${workspace.path}/proto',
+        '--out',
+        '${workspace.path}/go',
+        '--module',
+        'example.com/laska/users',
+      ]);
+
+      expect(result.code, 0, reason: result.err);
+      expect(File('${workspace.path}/go/go.mod').existsSync(), isTrue);
+      expect(File('${workspace.path}/go/users.pb.go').existsSync(), isTrue);
+      expect(
+        File('${workspace.path}/go/internal/wire/wire.go').existsSync(),
+        isTrue,
+      );
+      expect(
+        File('${workspace.path}/go/internal/grpc/grpc.go').existsSync(),
+        isTrue,
+      );
+      expect(
+        File('${workspace.path}/go/go.mod')
+            .readAsStringSync()
+            .contains('module example.com/laska/users'),
+        isTrue,
+      );
+    });
+
+    test('fails on an unknown language', () async {
+      writeContract('proto', _contract);
+
+      final result = await _run(<String>[
+        'contract',
+        'sdk',
+        '--lang=rust',
+        '--proto',
+        '${workspace.path}/proto',
+        '--out',
+        '${workspace.path}/go',
+      ]);
+
+      expect(result.code, isNot(0));
+    });
+
+    test('fails on a directory without a contract', () async {
+      final result = await _run(<String>[
+        'contract',
+        'sdk',
+        '--lang=go',
+        '--proto',
+        '${workspace.path}/empty',
+        '--out',
+        '${workspace.path}/go',
+      ]);
+
+      expect(result.code, 66);
+      expect(result.err, contains('No .proto files found'));
+    });
+  });
+
   group('laska contract diff', () {
     test('reports a breaking change and fails', () async {
       writeContract('base', _contract);

@@ -44,6 +44,35 @@ ArgParser buildParser() {
     );
   addHelpFlag(compile);
 
+  final sdk = contract.addCommand('sdk')
+    ..addOption(
+      'lang',
+      help: 'Language of the SDK.',
+      defaultsTo: 'go',
+      allowed: <String>['go'],
+    )
+    ..addOption(
+      'proto',
+      help: 'Directory containing the .proto files.',
+      defaultsTo: 'api',
+    )
+    ..addOption(
+      'out',
+      help: 'Directory the SDK is written to.',
+      defaultsTo: 'go',
+    )
+    ..addOption(
+      'module',
+      help: 'Path of the Go module of the SDK.',
+      defaultsTo: 'example.com/laska/sdk',
+    )
+    ..addOption(
+      'package',
+      help: 'Name of the Go package of the SDK. Defaults to the last part of '
+          'the path of the module.',
+    );
+  addHelpFlag(sdk);
+
   final lint = contract.addCommand('lint')
     ..addOption(
       'proto',

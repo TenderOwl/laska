@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- `laska contract sdk --lang=go` writes the SDK of a contract in Go: the
+  messages of the contract, the clients of its services and the runtime they
+  need. The SDK is a module of its own, and the path of the module is given
+  with `--module`.
+
 ## 0.2.0
 
 - `laska contract compile` writes the code in the style of the package it goes

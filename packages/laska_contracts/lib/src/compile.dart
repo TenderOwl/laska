@@ -83,10 +83,10 @@ class ContractCompiler {
   /// The version of the language the generated code is written for.
   final Version? languageVersion;
 
-  /// Compiles [sources] into generated files.
+  /// Reads [sources] into a contract.
   ///
   /// Throws [ContractCompileException] when the contract is inconsistent.
-  CompileResult compile(List<ProtoSource> sources) {
+  Contract build(List<ProtoSource> sources) {
     final parsed = <ProtoFile>[];
     for (final source in sources) {
       parsed.add(ProtoParser(source.content, fileName: source.path).parse());
@@ -98,6 +98,14 @@ class ContractCompiler {
     if (problems.isNotEmpty) {
       throw ContractCompileException(problems);
     }
+    return contract;
+  }
+
+  /// Compiles [sources] into generated files.
+  ///
+  /// Throws [ContractCompileException] when the contract is inconsistent.
+  CompileResult compile(List<ProtoSource> sources) {
+    final contract = build(sources);
 
     final generated = DartGenerator(
       contract,
@@ -440,22 +448,35 @@ Future<List<String>> writeGeneratedFiles(
   CompileResult result,
   String outputDirectory,
 ) async {
-  final written = <String>[];
-  final root = Directory(outputDirectory);
+  final written = await writeFiles(result.files, outputDirectory);
 
-  for (final file in result.files) {
-    final target = File('${root.path}/${file.path}');
-    await target.parent.create(recursive: true);
-    await target.writeAsString(file.content);
-    written.add(target.path);
-  }
-
-  final openapiFile = File('${root.path}/openapi.json');
+  final openapiFile = File('${Directory(outputDirectory).path}/openapi.json');
   await openapiFile.parent.create(recursive: true);
   await openapiFile.writeAsString(
     JsonEncoder.withIndent('  ').convert(result.openapi),
   );
   written.add(openapiFile.path);
+
+  return written;
+}
+
+/// Writes the files [files] into [outputDirectory].
+///
+/// The path of every file is relative to the directory, and the directories
+/// the files live in are created as they are needed.
+Future<List<String>> writeFiles(
+  List<GeneratedFile> files,
+  String outputDirectory,
+) async {
+  final written = <String>[];
+  final root = Directory(outputDirectory);
+
+  for (final file in files) {
+    final target = File('${root.path}/${file.path}');
+    await target.parent.create(recursive: true);
+    await target.writeAsString(file.content);
+    written.add(target.path);
+  }
 
   return written;
 }
