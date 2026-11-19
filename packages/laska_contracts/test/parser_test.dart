@@ -140,14 +140,19 @@ message User {
           'Stable identifier of the user.');
     });
 
-    test('records imports without resolving them', () {
+    test('records the imports of the file', () {
       final file = _parse('''
 syntax = "proto3";
 
 import "google/api/annotations.proto";
+import public "common/types.proto";
 ''');
 
-      expect(file.imports, <String>['google/api/annotations.proto']);
+      expect(file.imports, hasLength(2));
+      expect(file.imports.first.path, 'google/api/annotations.proto');
+      expect(file.imports.first.isPublic, isFalse);
+      expect(file.imports.last.path, 'common/types.proto');
+      expect(file.imports.last.isPublic, isTrue);
     });
 
     test('rejects constructs that are not supported yet', () {

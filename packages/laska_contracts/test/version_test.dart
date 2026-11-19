@@ -103,7 +103,7 @@ void main() {
           messages: const <Message>[],
           enums: const <EnumType>[],
           services: const <Service>[],
-          imports: const <String>[],
+          imports: const <ProtoImport>[],
         ),
       ]);
 

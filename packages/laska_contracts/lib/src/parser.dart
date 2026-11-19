@@ -64,7 +64,7 @@ class ProtoParser {
   ProtoFile parse() {
     final package = _guessPackage();
     final services = <Service>[];
-    final imports = <String>[];
+    final imports = <ProtoImport>[];
 
     while (true) {
       _skipTrivia();
@@ -87,11 +87,13 @@ class ProtoParser {
           _expectChar(';');
         case 'import':
           _expectIdent('import');
+          var isPublic = false;
           final modifier = _peekIdent();
           if (modifier == 'public' || modifier == 'weak') {
             _readIdent();
+            isPublic = modifier == 'public';
           }
-          imports.add(_readString());
+          imports.add(ProtoImport(_readString(), isPublic: isPublic));
           _expectChar(';');
         case 'option':
           _skipOption();

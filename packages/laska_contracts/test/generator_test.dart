@@ -96,7 +96,7 @@ void main() {
       expect(code(), contains('throw LaskaApiException('));
     });
 
-    test('warns about imports that are not resolved', () {
+    test('warns about imports that are not part of the contract', () {
       expect(result.warnings.single, contains('google/api/annotations.proto'));
     });
   });

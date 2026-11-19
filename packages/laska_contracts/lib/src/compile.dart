@@ -5,6 +5,7 @@ import 'package:pub_semver/pub_semver.dart';
 
 import 'generator/dart_generator.dart';
 import 'generator/openapi_generator.dart';
+import 'imports.dart';
 import 'model.dart';
 import 'naming.dart';
 import 'parser.dart';
@@ -92,6 +93,7 @@ class ContractCompiler {
     }
 
     final contract = Contract(parsed);
+    resolveImportedTypes(contract, ImportGraph(contract));
     final problems = validate(contract);
     if (problems.isNotEmpty) {
       throw ContractCompileException(problems);
@@ -209,6 +211,37 @@ class ContractCompiler {
       }
     }
 
+    // A type of a file that is not imported is not visible to the file that uses
+    // it, the way protobuf sees it.
+    final graph = ImportGraph(contract);
+    for (final file in contract.files) {
+      final visible = graph.visibleTo(file);
+
+      for (final reference in referencesOf(file)) {
+        if (scalarTypes.containsKey(reference)) {
+          continue;
+        }
+        if (wellKnownTypeOf(reference) != null) {
+          continue;
+        }
+
+        final message = resolver.findMessage(reference);
+        final enumType = resolver.findEnum(reference);
+        final owner = message != null
+            ? graph.fileOfMessage(message)
+            : (enumType != null ? graph.fileOfEnum(enumType) : null);
+        if (owner == null || owner == file || visible.contains(owner)) {
+          continue;
+        }
+
+        problems.add(
+          'The type "${message?.fullName ?? enumType?.fullName ?? reference}" '
+          'is used in "${file.path}", but the file "${owner.path}" that '
+          'declares it is not imported.',
+        );
+      }
+    }
+
     for (final service in contract.services) {
       for (final method in service.methods) {
         final request = resolver.findMessage(method.requestType);
@@ -277,12 +310,29 @@ class ContractCompiler {
   /// Collects non fatal observations about the contract.
   List<String> warnings(Contract contract) {
     final result = <String>[];
+    final graph = ImportGraph(contract);
+
     for (final file in contract.files) {
-      for (final import in file.imports) {
-        result.add(
-          'Import "$import" of "${file.path}" is recorded but not resolved; '
-          'only the types declared in the compiled files are available.',
-        );
+      for (final imported in file.imports) {
+        final target = graph.resolve(file, imported);
+        if (target == null) {
+          // The well-known types of protobuf are files of their own, and they
+          // are not part of the contract: their types live in the runtime.
+          if (wellKnownFileOf(imported.path) == null) {
+            result.add(
+              'Import "${imported.path}" of "${file.path}" is not a file of '
+              'the contract; only the types of the compiled files are '
+              'available.',
+            );
+          }
+          continue;
+        }
+
+        if (!_usesTypesOf(file, target, graph)) {
+          result.add(
+            'Import "${imported.path}" of "${file.path}" is not used.',
+          );
+        }
       }
       for (final service in file.services) {
         for (final method in service.methods) {
@@ -296,6 +346,43 @@ class ContractCompiler {
       }
     }
     return result;
+  }
+
+  /// Whether the file [file] uses a type of the file [target].
+  bool _usesTypesOf(ProtoFile file, ProtoFile target, ImportGraph graph) {
+    for (final reference in referencesOf(file)) {
+      final wellKnown = wellKnownTypeOf(reference);
+      if (wellKnown != null) {
+        if (wellKnown.protoPath == target.path) {
+          return true;
+        }
+        continue;
+      }
+
+      final message = graph.contract.message(reference);
+      if (message != null && graph.fileOfMessage(message) == target) {
+        return true;
+      }
+      final enumType = graph.contract.enumType(reference);
+      if (enumType != null && graph.fileOfEnum(enumType) == target) {
+        return true;
+      }
+
+      // A type that is not visible is not resolved, so it is looked up by its
+      // simple name.
+      final simple = reference.split('.').last;
+      for (final message in target.messages) {
+        if (message.name == simple) {
+          return true;
+        }
+      }
+      for (final enumType in target.enums) {
+        if (enumType.name == simple) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 }
 

@@ -40,11 +40,32 @@ class ProtoFile {
   /// Services declared in the file.
   final List<Service> services;
 
-  /// Imports found in the file. They are recorded but not resolved.
-  final List<String> imports;
+  /// Imports found in the file. They are recorded and resolved by the compiler.
+  final List<ProtoImport> imports;
 
   /// Fully qualified name of a message of this file.
   String qualify(String name) => package.isEmpty ? name : '$package.$name';
+}
+
+/// An import of a file of a contract.
+class ProtoImport {
+  /// Creates an import.
+  const ProtoImport(this.path, {this.isPublic = false});
+
+  /// The path of the imported file, as it is written in the contract.
+  ///
+  /// The path is the path of the file relative to the directory of the file
+  /// that imports it.
+  final String path;
+
+  /// Whether the import is a public one.
+  ///
+  /// A public import passes the types of the imported file to the files that
+  /// import the file that imports it.
+  final bool isPublic;
+
+  @override
+  String toString() => path;
 }
 
 /// The whole contract: every parsed file.
