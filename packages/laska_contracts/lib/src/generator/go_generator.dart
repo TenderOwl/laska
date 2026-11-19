@@ -427,6 +427,9 @@ go $goLanguageVersion
     writer.indent();
     for (final field in message.allFields) {
       final fieldName = _goFieldName(message, field);
+      // Every field holds a comment, and it is not only for the reader: a
+      // comment ends the block of the aligned columns of the formatter of Go,
+      // so the fields of a message are never moved around by it.
       _writeDoc(
         writer,
         field.comment,
@@ -644,6 +647,8 @@ go $goLanguageVersion
     writer.dedent();
     writer.write('}');
     writer.write('switch field {');
+    // The formatter of Go keeps the labels of the cases at the level of the
+    // switch, so the body of a case is one level deeper than the label.
     for (final field in message.allFields) {
       _writeUnmarshalField(writer, message, field);
     }
