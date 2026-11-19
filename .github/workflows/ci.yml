@@ -24,3 +24,6 @@ jobs:
 
       - name: Format, analyze and test
         run: dart run tool/check.dart
+
+      - name: Check the publication
+        run: dart run tool/publish.dart --all --dry-run
