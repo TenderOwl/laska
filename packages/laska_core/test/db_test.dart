@@ -85,6 +85,28 @@ void main() {
       expect(rows, isEmpty);
     });
 
+    test('keeps the refusal of the service inside a transaction', () async {
+      await database.execute(
+        'CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)',
+      );
+
+      // The refusal of the service carries the status the caller has to see,
+      // so the transaction may not turn it into a failure of the database.
+      await expectLater(
+        database.transaction((transaction) async {
+          await transaction.execute(
+            'INSERT INTO users (id, name) VALUES (?, ?)',
+            <Object?>[1, 'Ada'],
+          );
+          throw HttpException(422, 'The account does not hold the money.');
+        }),
+        throwsA(isA<HttpException>()),
+      );
+
+      final rows = await database.query('SELECT id FROM users');
+      expect(rows, isEmpty);
+    });
+
     test('answers the ping', () async {
       expect(await database.ping(), isTrue);
     });

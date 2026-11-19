@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:postgres/postgres.dart';
 
 import 'database.dart';
+import 'transaction.dart';
 
 /// A PostgreSQL database backed by a connection pool.
 class PostgresDatabase implements Database {
@@ -104,10 +105,7 @@ class PostgresDatabase implements Database {
         return action(_SessionDatabase(session));
       });
     } catch (error) {
-      if (error is DatabaseException) {
-        rethrow;
-      }
-      throw DatabaseException('Transaction failed', cause: error);
+      throw transactionError(error);
     }
   }
 

@@ -13,6 +13,7 @@ workspace:
   - packages/laska_test
   - example/auth_service
   - example/contract_slice
+  - example/database_service
 
 dependencies:
   laska_core: ^0.1.0

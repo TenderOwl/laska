@@ -1,6 +1,7 @@
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 import 'database.dart';
+import 'transaction.dart';
 
 /// A SQLite database.
 ///
@@ -57,10 +58,7 @@ class SqliteDatabase implements Database {
       return result;
     } catch (error) {
       _database.execute('ROLLBACK');
-      if (error is DatabaseException) {
-        rethrow;
-      }
-      throw DatabaseException('Transaction failed', cause: error);
+      throw transactionError(error);
     }
   }
 

@@ -13,6 +13,7 @@ Future<void> main() async {
     'packages/laska_test',
     'example/auth_service',
     'example/contract_slice',
+    'example/database_service',
   ];
 
   var failed = false;
