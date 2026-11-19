@@ -32,9 +32,9 @@
 - **The gate of the repository reads the workspace itself.** The list of the
   packages that are tested is read from the `workspace:` of the pubspec of the
   root, so a package that joins the workspace is tested without a change of
-  the gate. The gate also checks that the published packages hold one version,
-  and the pipeline checks that every package is ready to be published before a
-  release.
+  the gate. The gate also checks that the published packages hold one version
+  and that they are ready to be published: the metadata pub.dev asks for and no
+  path dependency, which pub.dev does not accept.
 
 - **The generated code is written in the style of the package it goes into.**
   The generator wrote the code in the newest style of the formatter, while

@@ -40,6 +40,10 @@ Future<void> main() async {
     failed = true;
   }
 
+  if (!checkPublication(root)) {
+    failed = true;
+  }
+
   // The list of the tests is the list of the workspace, read from the pubspec
   // of the root: a package that joins the workspace is tested without a change
   // of this file.
@@ -104,5 +108,69 @@ bool checkVersions(Directory root) {
   }
 
   stdout.writeln('the packages of the workspace hold the version $version');
+  return true;
+}
+
+/// Checks that the published packages are ready to be published on pub.dev.
+///
+/// The check reads the files of the packages, so it does not depend on the
+/// versions that are already on pub.dev: a package that needs a new version
+/// of another package of the workspace does not break the gate of the
+/// repository before it is released.
+///
+/// The dry run of the client (`dart run tool/publish.dart --all --dry-run`)
+/// checks the rest — the archive, the size and the warnings of pub.dev — and
+/// is run before a release.
+///
+/// Returns whether the packages are ready.
+bool checkPublication(Directory root) {
+  stdout.writeln('==> publication');
+
+  final problems = <String>[];
+
+  for (final package in publishedPackages) {
+    final directory = Directory('${root.path}/packages/$package');
+
+    for (final file in const <String>['LICENSE', 'README.md', 'CHANGELOG.md']) {
+      if (!File('${directory.path}/$file').existsSync()) {
+        problems.add('The package "$package" has no "$file".');
+      }
+    }
+
+    final pubspec = File('${directory.path}/pubspec.yaml');
+    if (!pubspec.existsSync()) {
+      problems.add('The package "$package" has no pubspec.');
+      continue;
+    }
+
+    final lines = pubspec.readAsLinesSync();
+    for (final key in const <String>['name:', 'version:', 'description:']) {
+      if (!lines.any((line) => line.startsWith(key))) {
+        problems.add('The pubspec of "$package" has no "$key".');
+      }
+    }
+    if (lines.any((line) => line.trim() == 'publish_to: none')) {
+      problems.add('The package "$package" is marked as "publish_to: none".');
+    }
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.startsWith('path:') || trimmed.contains('{path:')) {
+        problems.add(
+          'The pubspec of "$package" holds a path dependency ("$trimmed"); '
+          'pub.dev does not accept them.',
+        );
+      }
+    }
+  }
+
+  if (problems.isNotEmpty) {
+    stderr.writeln('FAILED: publication');
+    for (final problem in problems) {
+      stderr.writeln('  $problem');
+    }
+    return false;
+  }
+
+  stdout.writeln('the packages of the workspace are ready to be published');
   return true;
 }
