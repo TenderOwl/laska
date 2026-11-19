@@ -100,6 +100,7 @@ class User {
     required this.displayName,
     required this.role,
     this.tags = const <String>[],
+    required this.createdAt,
   });
 
   /// Stable identifier of the user.
@@ -116,6 +117,9 @@ class User {
 
   /// Free form tags.
   final List<String> tags;
+
+  /// The moment the account was created.
+  final ProtoTimestamp createdAt;
 
   /// Builds a User from its JSON representation.
   factory User.fromJson(Map<String, dynamic> json) {
@@ -136,6 +140,11 @@ class User {
     if (tags != null && tags is! List) {
       throw const FormatException('User.tags must be a list');
     }
+    final createdAt = json['createdAt'];
+    if (createdAt is! String) {
+      throw const FormatException('User.createdAt must be a string');
+    }
+    final createdAtValue = ProtoTimestamp.fromJson(createdAt);
     return User(
       id: id,
       email: email,
@@ -144,6 +153,7 @@ class User {
       tags: tags == null
           ? const <String>[]
           : List<String>.from(tags.map((item) => item as String)),
+      createdAt: createdAtValue,
     );
   }
 
@@ -154,6 +164,7 @@ class User {
         'displayName': displayName,
         'role': role.protoName,
         'tags': tags,
+        'createdAt': createdAt.toJson(),
       };
 
   /// The bytes of the message in the wire format of the protocol buffers.
@@ -174,6 +185,7 @@ class User {
     for (final item in tags) {
       writer.writeString(5, item);
     }
+    writer.writeMessage(6, createdAt.toProtoBytes());
     return writer.toBytes();
   }
 
@@ -185,6 +197,7 @@ class User {
     var displayName = '';
     var role = UserRole.userRoleUnspecified;
     var tags = <String>[];
+    ProtoTimestamp? createdAt;
 
     while (reader.hasNext) {
       final tag = reader.readTag();
@@ -199,17 +212,23 @@ class User {
           role = UserRole.fromNumber(reader.readEnum());
         case 5:
           tags.add(reader.readString());
+        case 6:
+          createdAt = ProtoTimestamp.fromProtoBytes(reader.readBytes());
         default:
           reader.skipField();
       }
     }
 
+    if (createdAt == null) {
+      throw FormatException('The message "User" needs the field "createdAt".');
+    }
     return User(
       id: id,
       email: email,
       displayName: displayName,
       role: role,
       tags: tags,
+      createdAt: createdAt,
     );
   }
 }

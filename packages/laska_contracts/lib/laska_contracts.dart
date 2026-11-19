@@ -17,3 +17,4 @@ export 'src/naming.dart';
 export 'src/parser.dart';
 export 'src/types.dart';
 export 'src/version.dart';
+export 'src/well_known.dart';

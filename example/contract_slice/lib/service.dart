@@ -5,12 +5,13 @@ import '../generated/users.pb.dart';
 /// An in-memory implementation of the users service.
 class UsersServiceImpl implements UsersService {
   final Map<String, User> _users = <String, User>{
-    'u_1': const User(
+    'u_1': User(
       id: 'u_1',
       email: 'ada@example.com',
       displayName: 'Ada Lovelace',
       role: UserRole.userRoleAdmin,
       tags: <String>['founder', 'mathematician'],
+      createdAt: ProtoTimestamp.fromDateTime(DateTime.utc(2026, 1, 1)),
     ),
   };
 
@@ -42,6 +43,7 @@ class UsersServiceImpl implements UsersService {
       email: request.email,
       displayName: request.displayName,
       role: request.role,
+      createdAt: ProtoTimestamp.fromDateTime(DateTime.now().toUtc()),
     );
     _users[id] = user;
     return user;

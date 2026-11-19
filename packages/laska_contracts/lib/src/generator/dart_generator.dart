@@ -4,6 +4,7 @@ import 'package:pub_semver/pub_semver.dart';
 import '../model.dart';
 import '../naming.dart';
 import '../types.dart';
+import '../well_known.dart';
 
 /// A file produced by a generator.
 class GeneratedFile {
@@ -1156,6 +1157,11 @@ class DartGenerator {
       return;
     }
 
+    if (type.isWellKnown) {
+      _writeWellKnownParser(writer, message, field, type);
+      return;
+    }
+
     if (type.isEnum && !field.repeated) {
       writer.write(
         "final ${property}Value = ${type.enumName}.fromName(json['$key'], field: '$name.$key');",
@@ -1193,6 +1199,24 @@ class DartGenerator {
     writer.write("final $property = json['$key'];");
 
     if (field.optional) {
+      if (type.isMessage) {
+        writer.write(
+          "if ($property != null && $property is! Map<String, dynamic>) {",
+        );
+        writer.indent();
+        writer.write(
+          "throw const FormatException('$name.$key must be an object');",
+        );
+        writer.dedent();
+        writer.write('}');
+        writer.write(
+          'final ${property}Value = $property == null '
+          '? null : ${type.messageName}'
+          '.fromJson($property as Map<String, dynamic>);',
+        );
+        return;
+      }
+
       writer
           .write("if ($property != null && $property is! ${type.dartType}) {");
       writer.indent();
@@ -1229,6 +1253,68 @@ class DartGenerator {
     writer.write('}');
   }
 
+  /// Writes the code that reads a well-known type out of the JSON of a message.
+  ///
+  /// A timestamp and a duration are a string in the JSON, the way protobuf
+  /// writes them, and the other well-known types are an object.
+  void _writeWellKnownParser(
+    _Writer writer,
+    Message message,
+    Field field,
+    DartType type,
+  ) {
+    final key = camelCase(field.name);
+    final property = camelCase(field.name);
+    final name = message.dartName;
+    final wellKnown = wellKnownTypeOf(type.protoType)!;
+    final shape = wellKnown.isTextJson ? 'String' : 'Map<String, dynamic>';
+    final expected = wellKnown.isTextJson ? 'a string' : 'an object';
+
+    if (field.repeated) {
+      final element = _elementType(type.dartType);
+      writer.write("final $property = json['$key'];");
+      writer.write("if ($property != null && $property is! List) {");
+      writer.indent();
+      writer.write("throw const FormatException('$name.$key must be a list');");
+      writer.dedent();
+      writer.write('}');
+      writer.write(
+        'final ${property}Value = $property == null '
+        '? const <$element>[] '
+        ': List<$element>.from($property.map((item) => '
+        '${type.messageName}.fromJson(item)));',
+      );
+      return;
+    }
+
+    writer.write("final $property = json['$key'];");
+
+    if (field.optional) {
+      writer.write("if ($property != null && $property is! $shape) {");
+      writer.indent();
+      writer.write(
+        "throw const FormatException('$name.$key must be $expected');",
+      );
+      writer.dedent();
+      writer.write('}');
+      writer.write(
+        'final ${property}Value = $property == null '
+        '? null : ${type.messageName}.fromJson($property);',
+      );
+      return;
+    }
+
+    writer.write("if ($property is! $shape) {");
+    writer.indent();
+    writer
+        .write("throw const FormatException('$name.$key must be $expected');");
+    writer.dedent();
+    writer.write('}');
+    writer.write(
+      'final ${property}Value = ${type.messageName}.fromJson($property);',
+    );
+  }
+
   /// Writes the code that reads a map out of the JSON of a message.
   void _writeMapParser(
     _Writer writer,
@@ -1256,7 +1342,12 @@ class DartGenerator {
     writer.indent();
     writer.write('$property.forEach((mapKey, mapValue) {');
     writer.indent();
-    if (value.isMessage) {
+    if (value.isWellKnown) {
+      writer.write(
+        '${property}Value[mapKey as String] = '
+        '${value.messageName}.fromJson(mapValue);',
+      );
+    } else if (value.isMessage) {
       writer.write(
         '${property}Value[mapKey as String] = '
         '${value.messageName}.fromJson(mapValue as Map<String, dynamic>);',
@@ -1782,10 +1873,18 @@ class DartGenerator {
       writer.write(
         '? ${responseType.dartType}.fromProtoBytes(response.body)',
       );
-      writer.write(
-        ': ${responseType.dartType}.fromJson('
-        'jsonDecode(response.text) as Map<String, dynamic>);',
-      );
+      if (responseType.isWellKnown) {
+        // A well-known type is a string in the JSON — a timestamp and a
+        // duration — or an object, so it is read out of the answer as it is.
+        writer.write(
+          ': ${responseType.dartType}.fromJson(jsonDecode(response.text));',
+        );
+      } else {
+        writer.write(
+          ': ${responseType.dartType}.fromJson('
+          'jsonDecode(response.text) as Map<String, dynamic>);',
+        );
+      }
       writer.dedent();
     }
 
@@ -1848,16 +1947,22 @@ class DartGenerator {
 
   Field _requestField(Method method) {
     final message = _types.findMessage(method.requestType);
-    if (message == null) {
-      throw StateError('Unknown request type "${method.requestType}"');
+    if (message != null) {
+      return _syntheticField(message);
     }
-    return _syntheticField(message);
+    if (_types.findWellKnown(method.requestType) != null) {
+      return Field(name: 'request', number: 0, type: method.requestType);
+    }
+    throw StateError('Unknown request type "${method.requestType}"');
   }
 
   Field _responseField(Method method) {
     final message = _types.findMessage(method.responseType);
     if (message != null) {
       return _syntheticField(message);
+    }
+    if (_types.findWellKnown(method.responseType) != null) {
+      return Field(name: 'response', number: 0, type: method.responseType);
     }
     final enumType = _types.findEnum(method.responseType);
     if (enumType == null) {

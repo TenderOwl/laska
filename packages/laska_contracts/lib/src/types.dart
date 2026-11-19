@@ -1,4 +1,5 @@
 import 'model.dart';
+import 'well_known.dart';
 
 /// Dart type information of a contract type.
 class DartType {
@@ -13,6 +14,7 @@ class DartType {
     this.isMap = false,
     this.mapKeyType,
     this.mapValue,
+    this.isWellKnown = false,
   });
 
   /// The Dart type as it is written in generated code, e.g. `List<String>`.
@@ -41,6 +43,12 @@ class DartType {
 
   /// The type of the value of a map.
   final DartType? mapValue;
+
+  /// Whether the type is one of the well-known types of protobuf.
+  ///
+  /// A well-known type is a message of the protocol buffers that every
+  /// contract may use, and it is compiled into a type of the runtime.
+  final bool isWellKnown;
 }
 
 /// The scalar types of proto3 and their Dart counterparts.
@@ -106,17 +114,29 @@ class TypeResolver {
       isEnum: type.isEnum,
       messageName: type.messageName,
       enumName: type.enumName,
+      isWellKnown: type.isWellKnown,
     );
   }
 
   /// Resolves the type of the name [name], as it is written in a contract.
   ///
-  /// The name may be a scalar, a message or an enum, and it may be qualified
-  /// with the scope it was declared in.
+  /// The name may be a scalar, a well-known type, a message or an enum, and it
+  /// may be qualified with the scope it was declared in.
   DartType resolveTypeName(String name) {
     final scalar = scalarTypes[name];
     if (scalar != null) {
       return DartType(dartType: scalar, protoType: name);
+    }
+
+    final wellKnown = wellKnownTypeOf(name);
+    if (wellKnown != null) {
+      return DartType(
+        dartType: wellKnown.dartName,
+        protoType: name,
+        isMessage: true,
+        messageName: wellKnown.dartName,
+        isWellKnown: true,
+      );
     }
 
     final message = _findMessage(name);
@@ -147,6 +167,23 @@ class TypeResolver {
 
   /// Finds the enum a type reference points to.
   EnumType? findEnum(String reference) => _findEnum(reference);
+
+  /// Finds the well-known type a type reference points to.
+  WellKnownType? findWellKnown(String reference) => wellKnownTypeOf(reference);
+
+  /// Whether the name [reference] points to a type a contract may use.
+  ///
+  /// A type is a scalar, a well-known type, a message or an enum of the
+  /// contract.
+  bool isKnownType(String reference) {
+    if (scalarTypes.containsKey(reference)) {
+      return true;
+    }
+    if (wellKnownTypeOf(reference) != null) {
+      return true;
+    }
+    return findMessage(reference) != null || findEnum(reference) != null;
+  }
 
   /// Resolves the type of a map field.
   DartType _resolveMap(Field field) {

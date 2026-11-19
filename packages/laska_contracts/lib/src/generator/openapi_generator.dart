@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../model.dart';
 import '../naming.dart';
 import '../types.dart';
+import '../well_known.dart';
 
 /// Generates an OpenAPI 3.1 document out of a [Contract].
 ///
@@ -209,28 +210,21 @@ class OpenApiGenerator {
       };
     }
 
-    if (type.isMessage) {
-      return <String, dynamic>{
-        r'$ref': '#/components/schemas/${type.messageName}',
-      };
-    }
-    if (type.isEnum) {
-      return <String, dynamic>{
-        'type': 'string',
-        r'$ref': '#/components/schemas/${type.enumName}',
-      };
-    }
-    final scalar = _scalarSchema(type.dartType);
+    final item = _schemaOfType(type.protoType);
     if (field.repeated) {
-      return <String, dynamic>{'type': 'array', 'items': scalar};
+      return <String, dynamic>{'type': 'array', 'items': item};
     }
-    return scalar;
+    return item;
   }
 
   Map<String, dynamic> _schemaOfType(String reference) {
     final scalar = scalarTypes[reference];
     if (scalar != null) {
       return _scalarSchema(scalar);
+    }
+    final wellKnown = _types.findWellKnown(reference);
+    if (wellKnown != null) {
+      return _wellKnownSchema(wellKnown);
     }
     final message = _types.findMessage(reference);
     if (message != null) {
@@ -246,6 +240,22 @@ class OpenApiGenerator {
       };
     }
     return <String, dynamic>{'type': 'string'};
+  }
+
+  /// The schema of a well-known type.
+  ///
+  /// A timestamp is the time in the format of RFC 3339, a duration is the
+  /// number of seconds, and the other well-known types are an object.
+  Map<String, dynamic> _wellKnownSchema(WellKnownType type) {
+    switch (type.jsonKind) {
+      case WellKnownJson.timestamp:
+        return <String, dynamic>{'type': 'string', 'format': 'date-time'};
+      case WellKnownJson.duration:
+        return <String, dynamic>{'type': 'string'};
+      case WellKnownJson.any:
+      case WellKnownJson.empty:
+        return <String, dynamic>{'type': 'object'};
+    }
   }
 
   Map<String, dynamic> _scalarSchema(String dartType) {

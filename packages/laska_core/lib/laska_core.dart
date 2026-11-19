@@ -52,3 +52,4 @@ export 'src/telemetry/middleware.dart';
 export 'src/telemetry/otel.dart';
 export 'src/telemetry/tracer.dart';
 export 'src/transport.dart';
+export 'src/well_known.dart';

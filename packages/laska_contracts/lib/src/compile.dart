@@ -9,6 +9,7 @@ import 'model.dart';
 import 'naming.dart';
 import 'parser.dart';
 import 'types.dart';
+import 'well_known.dart';
 
 /// A `.proto` source with the path it was read from.
 class ProtoSource {
@@ -119,7 +120,11 @@ class ContractCompiler {
     final problems = <String>[];
     final resolver = TypeResolver(contract);
 
-    final messageNames = <String, String>{};
+    // The well-known types are compiled into the types of the runtime, so a
+    // message of the contract may not take the name of one of them.
+    final messageNames = <String, String>{
+      for (final type in wellKnownTypes.values) type.dartName: type.protoName,
+    };
     for (final message in contract.messages) {
       final previous = messageNames[message.dartName];
       if (previous != null) {
@@ -185,9 +190,7 @@ class ContractCompiler {
             );
           }
           final value = field.mapValueType ?? '';
-          if (!scalarTypes.containsKey(value) &&
-              resolver.findMessage(value) == null &&
-              resolver.findEnum(value) == null) {
+          if (!resolver.isKnownType(value)) {
             problems.add(
               'Field "${message.fullName}.${field.name}" has a value of the '
               'unknown type "$value".',
@@ -196,11 +199,7 @@ class ContractCompiler {
           continue;
         }
 
-        if (scalarTypes.containsKey(field.type)) {
-          continue;
-        }
-        if (resolver.findMessage(field.type) != null ||
-            resolver.findEnum(field.type) != null) {
+        if (resolver.isKnownType(field.type)) {
           continue;
         }
         problems.add(
@@ -213,22 +212,42 @@ class ContractCompiler {
     for (final service in contract.services) {
       for (final method in service.methods) {
         final request = resolver.findMessage(method.requestType);
-        if (request == null) {
+        final requestIsWellKnown =
+            resolver.findWellKnown(method.requestType) != null;
+        if (request == null && !requestIsWellKnown) {
           problems.add(
             'Method "${service.fullName}.${method.name}" has an unknown '
             'request type "${method.requestType}".',
           );
         }
         if (resolver.findMessage(method.responseType) == null &&
-            resolver.findEnum(method.responseType) == null) {
+            resolver.findEnum(method.responseType) == null &&
+            resolver.findWellKnown(method.responseType) == null) {
           problems.add(
             'Method "${service.fullName}.${method.name}" has an unknown '
             'response type "${method.responseType}".',
           );
         }
 
+        final requestWellKnown = resolver.findWellKnown(method.requestType);
+        if (requestWellKnown != null && requestWellKnown.isTextJson) {
+          problems.add(
+            'Method "${service.fullName}.${method.name}" takes the well-known '
+            'type "${method.requestType}" as its request, and the body of a '
+            'request is read as an object; the type is a string in the JSON.',
+          );
+        }
+
         for (final rule in method.httpRules) {
           if (request == null) {
+            if (requestIsWellKnown && rule.pathParameters.isNotEmpty) {
+              problems.add(
+                'The request type "${method.requestType}" of '
+                '"${service.fullName}.${method.name}" is a well-known type and '
+                'holds no field, so it cannot carry the path parameters '
+                '${rule.pathParameters.map((p) => '{$p}').join(', ')}.',
+              );
+            }
             continue;
           }
           for (final parameter in rule.pathParameters) {

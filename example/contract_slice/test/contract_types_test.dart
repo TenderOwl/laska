@@ -1,4 +1,5 @@
 import 'package:contract_slice_example/generated/users.pb.dart';
+import 'package:laska_core/laska_core.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -65,6 +66,30 @@ void main() {
       expect(read.payment, isA<SubscriptionPaymentCardToken>());
       expect((read.payment! as SubscriptionPaymentCardToken).value, 'tok_1');
       expect(read.features, isEmpty);
+    });
+
+    test('a well-known type keeps the JSON and the bytes of protobuf', () {
+      const createdAt = ProtoTimestamp(seconds: 1767225600);
+
+      const user = User(
+        id: 'u_1',
+        email: 'ada@example.com',
+        displayName: 'Ada Lovelace',
+        role: UserRole.userRoleAdmin,
+        tags: <String>[],
+        createdAt: createdAt,
+      );
+
+      expect(user.toJson()['createdAt'], '2026-01-01T00:00:00Z');
+
+      final read = User.fromJson(user.toJson());
+
+      expect(read.createdAt, createdAt);
+      expect(read.createdAt.toDateTime(), DateTime.utc(2026, 1, 1));
+
+      final fromBytes = User.fromProtoBytes(user.toProtoBytes());
+
+      expect(fromBytes.createdAt, createdAt);
     });
   });
 }

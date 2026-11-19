@@ -3,6 +3,7 @@ syntax = "proto3";
 package users.v1;
 
 import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
 
 // UsersService manages the accounts of the application.
 service UsersService {
@@ -51,6 +52,9 @@ message User {
 
   // Free form tags.
   repeated string tags = 5;
+
+  // The moment the account was created.
+  google.protobuf.Timestamp created_at = 6;
 }
 
 // The role a user has.
