@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- A boolean is written with its value now. The writer of the wire format wrote
+  the value `1` whatever the boolean was, so every `false` of a contract came
+  back as `true`.
+
 ## 0.1.0
 
 - The first release of the runtime: the routing, the middleware, the request and

@@ -1,5 +1,41 @@
 ## Unreleased
 
+- **The parser reads the whole of proto3 a service needs.** A contract may hold
+  `map` fields, groups of a `oneof` and messages and enums that are declared
+  inside a message — the constructs that are in almost every real contract and
+  that the parser refused before.
+  - A map is a `Map<K, V>` in Dart, an object in JSON and a repeated message on
+    the wire: every entry holds the key in the field 1 and the value in the
+    field 2.
+  - A group of a `oneof` is a sealed class, and every member is a class of its
+    own, so the members stay exclusive. The JSON of a group holds the member
+    that is set under its own name, the way protobuf writes it.
+  - A type declared inside a message is generated into a class of its own,
+    named after the scope it was declared in: the message `Plan` of the message
+    `Subscription` is generated into the class `SubscriptionPlan`.
+  - The types that are written without a qualifier are resolved the way protobuf
+    resolves them: the scope of the message is searched first, then the scopes
+    the message is declared in.
+  - The OpenAPI document describes the new types: a map is an object with the
+    schema of its values, and a group is a `oneOf` of its members.
+  - The check of the breaking changes knows the groups: a member that joins a
+    group that already exists, and a member that leaves one, break the
+    consumers.
+
+- **Two faults of the wire format and of the generator are fixed.**
+  - A boolean was written with the value `1` whatever it was, so every `false`
+    of a contract came back as `true`. The value of the boolean is written now.
+  - A field that may be absent was generated as `<Type>?`, which is not a valid
+    Dart type, so a contract with an optional field produced code that did not
+    compile.
+
+- **The gate of the repository reads the workspace itself.** The list of the
+  packages that are tested is read from the `workspace:` of the pubspec of the
+  root, so a package that joins the workspace is tested without a change of
+  the gate. The gate also checks that the published packages hold one version,
+  and the pipeline checks that every package is ready to be published before a
+  release.
+
 - **The examples of the repository:**
   - `example/auth_service` shows how a caller proves who it is: a token, a scope
     of the token, the API key of a machine and the session of a browser. The

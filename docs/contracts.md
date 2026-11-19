@@ -54,6 +54,78 @@ The rules the contract follows are the ones `laska contract lint` checks:
   UPPER_SNAKE_CASE;
 - the methods are written in PascalCase.
 
+## The types a contract holds
+
+The parser reads the whole of proto3 that a service needs: the scalar types,
+the messages, the enums, the repeated fields, the maps, the groups of a
+`oneof` and the messages and the enums that are declared inside a message.
+
+### A map
+
+```proto
+message Subscription {
+  // The features of the plan, by their name.
+  map<string, bool> features = 1;
+}
+```
+
+A map is a `Map<String, bool>` in Dart, and an object in JSON. On the wire it
+is a repeated message: every entry holds the key in the field 1 and the value
+in the field 2, the way protobuf writes it.
+
+### A group of a oneof
+
+```proto
+message Subscription {
+  // How the subscription is paid.
+  oneof payment {
+    string card_token = 4;
+    string iban = 5;
+  }
+}
+```
+
+The members of a group are exclusive, and the generated code keeps them
+exclusive: the group is a sealed class, and every member is a class of its
+own.
+
+```dart
+const Subscription(
+  // ...
+  payment: SubscriptionPaymentIban('DE00'),
+);
+```
+
+The JSON of a group holds the member that is set under its own name, the way
+protobuf writes it: `{"iban": "DE00"}`.
+
+### A type inside a type
+
+```proto
+message Subscription {
+  // The plan of the subscription.
+  message Plan {
+    string name = 1;
+    int32 seats = 2;
+  }
+
+  // The state of the subscription.
+  enum State {
+    SUBSCRIPTION_STATE_ACTIVE = 0;
+    SUBSCRIPTION_STATE_PAUSED = 1;
+  }
+
+  Plan plan = 1;
+  State state = 2;
+}
+```
+
+A type declared inside a message is generated into a class of its own, named
+after the scope it was declared in: the message `Plan` of the message
+`Subscription` is generated into the class `SubscriptionPlan`. The types are
+resolved the way protobuf resolves them: the scope of the message is searched
+first, then the scopes the message is declared in.
+
 ## The policy of the calls
 
 `option (laska.policy)` describes **how the service is called**, on the
