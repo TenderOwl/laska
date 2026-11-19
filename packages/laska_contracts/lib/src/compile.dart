@@ -354,7 +354,8 @@ class ContractCompiler {
           if (method.httpRules.isEmpty) {
             result.add(
               'Method "${service.fullName}.${method.name}" has no '
-              'google.api.http binding and is therefore not exposed over HTTP.',
+              'google.api.http binding and is therefore exposed over gRPC '
+              'only.',
             );
           }
         }

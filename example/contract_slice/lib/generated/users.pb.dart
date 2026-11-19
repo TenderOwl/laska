@@ -815,11 +815,15 @@ abstract class UsersService {
   Future<User> createUser(CreateUserRequest request);
 }
 
-/// Registers the REST projection of [service] on [app].
+/// Registers the projections of [service] on [app].
+///
+/// The service is registered over HTTP and over gRPC, so the
+/// contract of the service is served on both transports.
 void registerUsersService(
   Laska app,
   UsersService service, {
   List<Middleware> middleware = const <Middleware>[],
+  bool grpc = true,
 }) {
   app.get(
     '/v1/users/:id',
@@ -862,6 +866,32 @@ void registerUsersService(
     },
     middleware: middleware,
   );
+
+  if (grpc) {
+    app.grpc.add(
+      GrpcService(
+        name: 'users.v1.UsersService',
+        methods: <String, GrpcHandler>{
+          'GetUser': (bytes) async {
+            final request = GetUserRequest.fromProtoBytes(bytes);
+            final response = await service.getUser(request);
+            return response.toProtoBytes();
+          },
+          'ListUsers': (bytes) async {
+            final request = ListUsersRequest.fromProtoBytes(bytes);
+            final response = await service.listUsers(request);
+            return response.toProtoBytes();
+          },
+          'CreateUser': (bytes) async {
+            final request = CreateUserRequest.fromProtoBytes(bytes);
+            final response = await service.createUser(request);
+            return response.toProtoBytes();
+          },
+        },
+        middleware: middleware,
+      ),
+    );
+  }
 }
 
 /// The policies of the methods of the `UsersService` service.
@@ -981,14 +1011,18 @@ class UsersServiceClient {
     );
 
     final headers = <String, String>{
-      'accept': 'application/json',
+      'accept': _transport.bodyFormat == BodyFormat.protobuf
+          ? 'application/protobuf'
+          : 'application/json',
     };
 
     if (idempotencyKey != null) {
       headers['idempotency-key'] = idempotencyKey;
     }
 
-    final body = null;
+    final body = _transport.bodyFormat == BodyFormat.protobuf
+        ? request.toProtoBytes()
+        : null;
 
     final response = await _send(
       'GetUser',
@@ -1021,14 +1055,18 @@ class UsersServiceClient {
         );
 
     final headers = <String, String>{
-      'accept': 'application/json',
+      'accept': _transport.bodyFormat == BodyFormat.protobuf
+          ? 'application/protobuf'
+          : 'application/json',
     };
 
     if (idempotencyKey != null) {
       headers['idempotency-key'] = idempotencyKey;
     }
 
-    final body = null;
+    final body = _transport.bodyFormat == BodyFormat.protobuf
+        ? request.toProtoBytes()
+        : null;
 
     final response = await _send(
       'ListUsers',
@@ -1055,8 +1093,12 @@ class UsersServiceClient {
     );
 
     final headers = <String, String>{
-      'accept': 'application/json',
-      'content-type': 'application/json',
+      'accept': _transport.bodyFormat == BodyFormat.protobuf
+          ? 'application/protobuf'
+          : 'application/json',
+      'content-type': _transport.bodyFormat == BodyFormat.protobuf
+          ? 'application/protobuf'
+          : 'application/json',
     };
 
     final key = idempotencyKey ?? newIdempotencyKey();

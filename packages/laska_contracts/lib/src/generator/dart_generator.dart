@@ -149,15 +149,15 @@ class DartGenerator {
       writer.blank();
       _writeServiceInterface(writer, service);
       writer.blank();
-      if (service.methods.any((method) => method.httpRules.isNotEmpty)) {
-        _writeRouter(writer, service);
+      if (service.methods.isNotEmpty) {
+        _writeRegister(writer, service);
         writer.blank();
       }
       if (_hasPolicies(service)) {
         _writePolicies(writer, service);
         writer.blank();
       }
-      if (service.methods.any((method) => method.httpRules.isNotEmpty)) {
+      if (service.methods.isNotEmpty) {
         _writeClient(writer, service);
         writer.blank();
       }
@@ -1448,15 +1448,24 @@ class DartGenerator {
     writer.write('}');
   }
 
-  void _writeRouter(_Writer writer, Service service) {
+  /// Writes the function that registers the projections of the service.
+  ///
+  /// The service is registered over HTTP and over gRPC, so the contract of
+  /// the service is served on both transports.
+  void _writeRegister(_Writer writer, Service service) {
     final name = pascalCase(service.name);
-    writer.write('/// Registers the REST projection of [service] on [app].');
+    writer.write('/// Registers the projections of [service] on [app].');
+    writer.write('///');
+    writer
+        .write('/// The service is registered over HTTP and over gRPC, so the');
+    writer.write('/// contract of the service is served on both transports.');
     writer.write('void register$name(');
     writer.indent();
     writer.write('Laska app,');
     writer.write('$name service, {');
     writer.indent();
     writer.write('List<Middleware> middleware = const <Middleware>[],');
+    writer.write('bool grpc = true,');
     writer.dedent();
     writer.write('}) {');
     writer.indent();
@@ -1467,9 +1476,59 @@ class DartGenerator {
       }
     }
 
+    writer.write('if (grpc) {');
+    writer.indent();
+    writer.write('app.grpc.add(');
+    writer.indent();
+    writer.write('GrpcService(');
+    writer.indent();
+    writer.write("name: '${service.fullName}',");
+    writer.write('methods: <String, GrpcHandler>{');
+    writer.indent();
+    for (final method in service.methods) {
+      _writeGrpcMethod(writer, method);
+    }
+    writer.dedent();
+    writer.write('},');
+    writer.write('middleware: middleware,');
+    writer.dedent();
+    writer.write('),');
+    writer.dedent();
+    writer.write(');');
+    writer.dedent();
+    writer.write('}');
+
     writer.dedent();
     writer.dedent();
     writer.write('}');
+  }
+
+  /// Writes the handler of a method of the service over gRPC.
+  ///
+  /// The handler reads the request message out of the bytes of the call and
+  /// writes the answer of the service back in the same format.
+  void _writeGrpcMethod(_Writer writer, Method method) {
+    final requestType = _types.resolve(_requestField(method));
+    final responseType = _types.resolve(_responseField(method));
+    final methodName = camelCase(method.name);
+
+    writer.write("'${method.name}': (bytes) async {");
+    writer.indent();
+    writer.write(
+      'final request = ${requestType.dartType}.fromProtoBytes(bytes);',
+    );
+    writer.write('final response = await service.$methodName(request);');
+    if (responseType.isEnum) {
+      // An enum is a number on the wire, and it is the whole body of the
+      // answer, so it goes out without a tag.
+      writer.write('final protoWriter = ProtoWriter();');
+      writer.write('protoWriter.writeRawVarint(response.number);');
+      writer.write('return protoWriter.toBytes();');
+    } else {
+      writer.write('return response.toProtoBytes();');
+    }
+    writer.dedent();
+    writer.write('},');
   }
 
   void _writeRoute(_Writer writer, Method method, HttpRule rule) {
@@ -1633,9 +1692,12 @@ class DartGenerator {
     writer.blank();
 
     for (final method in service.methods) {
-      for (final rule in method.httpRules) {
-        _writeClientMethod(writer, service, method, rule);
-      }
+      _writeClientMethod(
+        writer,
+        service,
+        method,
+        method.httpRules.isEmpty ? null : method.httpRules.first,
+      );
     }
 
     _writeClientSend(writer);
@@ -1731,13 +1793,13 @@ class DartGenerator {
     _Writer writer,
     Service service,
     Method method,
-    HttpRule rule,
+    HttpRule? rule,
   ) {
     final requestField = _requestField(method);
     final requestType = _types.resolve(requestField);
     final responseType = _types.resolve(_responseField(method));
     final methodName = camelCase(method.name);
-    final pathParams = rule.pathParameters;
+    final pathParams = rule?.pathParameters ?? const <String>[];
     final policy = _policyOf(service, method);
     final idempotent = policy.idempotent ?? false;
 
@@ -1748,8 +1810,25 @@ class DartGenerator {
     );
     writer.indent();
 
+    if (rule == null) {
+      // The method has no HTTP binding, so it is reachable over gRPC only.
+      writer.write('if (_transport.bodyFormat != BodyFormat.protobuf) {');
+      writer.indent();
+      writer.write(
+        "throw LaskaApiException(501, 'The method \"${method.name}\" of the "
+        'service "${service.name}" has no HTTP binding.\');',
+      );
+      writer.dedent();
+      writer.write('}');
+      writer.blank();
+    }
+
     final queryFields = <Field>[];
     for (final field in _fieldsOf(requestField)) {
+      if (rule == null) {
+        // A method without an HTTP binding has no query either.
+        break;
+      }
       if (pathParams.contains(field.name)) {
         continue;
       }
@@ -1780,7 +1859,8 @@ class DartGenerator {
       writer.blank();
     }
 
-    final pathExpression = _pathExpression(rule, pathParams);
+    final pathExpression =
+        rule == null ? '' : _pathExpression(rule, pathParams);
     writer.write('final uri = _transport.buildUri(');
     writer.indent();
     writer.write("'$pathExpression',");
@@ -1798,13 +1878,25 @@ class DartGenerator {
     }
     writer.blank();
 
-    final verb = rule.method.toLowerCase();
+    final verb = rule?.method.toLowerCase() ?? 'post';
 
     writer.write('final headers = <String, String>{');
     writer.indent();
-    writer.write("'accept': 'application/json',");
+    writer.write(
+      "'accept': _transport.bodyFormat == BodyFormat.protobuf",
+    );
+    writer.indent();
+    writer.write("? 'application/protobuf'");
+    writer.write(": 'application/json',");
+    writer.dedent();
     if (verb != 'get' && verb != 'delete') {
-      writer.write("'content-type': 'application/json',");
+      writer.write(
+        "'content-type': _transport.bodyFormat == BodyFormat.protobuf",
+      );
+      writer.indent();
+      writer.write("? 'application/protobuf'");
+      writer.write(": 'application/json',");
+      writer.dedent();
     }
     writer.dedent();
     writer.write('};');
@@ -1822,23 +1914,25 @@ class DartGenerator {
     }
     writer.blank();
 
-    if (rule.body != null) {
-      final jsonExpression = rule.body == '*'
-          ? 'request.toJson()'
-          : 'request.${camelCase(rule.body!)}.toJson()';
-      final protoExpression = rule.body == '*'
-          ? 'request.toProtoBytes()'
-          : 'request.${camelCase(rule.body!)}.toProtoBytes()';
-      writer.write(
-        'final body = _transport.bodyFormat == BodyFormat.protobuf',
-      );
-      writer.indent();
-      writer.write('? $protoExpression');
-      writer.write(': utf8.encode(jsonEncode($jsonExpression));');
-      writer.dedent();
+    // A gRPC call carries the whole request message. The body of a REST call
+    // is the field of the binding, so the two transports do not send the same
+    // bytes.
+    final String httpBody;
+    if (rule == null || rule.body == null) {
+      httpBody = 'null';
+    } else if (rule.body == '*') {
+      httpBody = 'utf8.encode(jsonEncode(request.toJson()))';
     } else {
-      writer.write('final body = null;');
+      httpBody =
+          'utf8.encode(jsonEncode(request.${camelCase(rule.body!)}.toJson()))';
     }
+    writer.write(
+      'final body = _transport.bodyFormat == BodyFormat.protobuf',
+    );
+    writer.indent();
+    writer.write('? request.toProtoBytes()');
+    writer.write(': $httpBody;');
+    writer.dedent();
     writer.blank();
 
     writer.write('final response = await _send(');
