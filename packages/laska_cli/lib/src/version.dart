@@ -10,4 +10,4 @@
 /// command runs in ways where the pubspec of the package is not to be found:
 /// the bundle of the release, for instance, carries the code and not the
 /// pubspec.
-const String laskaVersion = '0.1.0';
+const String laskaVersion = '0.2.0';
