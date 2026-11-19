@@ -85,8 +85,8 @@ message User { string id = 1; }
 
       final get = service.methods.first;
       expect(get.name, 'GetUser');
-      expect(get.requestType, 'GetUserRequest');
-      expect(get.responseType, 'User');
+      expect(get.requestType, 'users.v1.GetUserRequest');
+      expect(get.responseType, 'users.v1.User');
       expect(get.httpRules.single.method, 'GET');
       expect(get.httpRules.single.path, '/v1/users/{id}');
       expect(get.httpRules.single.pathParameters, <String>['id']);
@@ -153,17 +153,7 @@ import "google/api/annotations.proto";
     test('rejects constructs that are not supported yet', () {
       expect(
         () => _parse(
-            'syntax = "proto3"; message A { oneof x { string a = 1; } }'),
-        throwsA(isA<ProtoParseException>()),
-      );
-      expect(
-        () =>
-            _parse('syntax = "proto3"; message A { map<string, int> a = 1; }'),
-        throwsA(isA<ProtoParseException>()),
-      );
-      expect(
-        () => _parse(
-            'syntax = "proto3"; message A { message B { string a = 1; } }'),
+            'syntax = "proto3"; message A { extend B { string a = 1; } }'),
         throwsA(isA<ProtoParseException>()),
       );
     });

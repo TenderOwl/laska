@@ -4,6 +4,7 @@ import 'dart:io';
 import 'generator/dart_generator.dart';
 import 'generator/openapi_generator.dart';
 import 'model.dart';
+import 'naming.dart';
 import 'parser.dart';
 import 'types.dart';
 
@@ -103,33 +104,51 @@ class ContractCompiler {
 
     final messageNames = <String, String>{};
     for (final message in contract.messages) {
-      final previous = messageNames[message.name];
+      final previous = messageNames[message.dartName];
       if (previous != null) {
         problems.add(
-          'Message "${message.name}" is declared twice ($previous and '
-          '${message.fullName}); Dart class names must be unique.',
+          'Message "${message.fullName}" is generated into the class '
+          '"${message.dartName}", which "$previous" already uses; Dart class '
+          'names must be unique.',
         );
       } else {
-        messageNames[message.name] = message.fullName;
+        messageNames[message.dartName] = message.fullName;
       }
     }
 
     final enumNames = <String, String>{};
     for (final enumType in contract.enums) {
-      final previous = enumNames[enumType.name];
+      final previous = enumNames[enumType.dartName];
       if (previous != null) {
         problems.add(
-          'Enum "${enumType.name}" is declared twice ($previous and '
-          '${enumType.fullName}); Dart type names must be unique.',
+          'Enum "${enumType.fullName}" is generated into the enum '
+          '"${enumType.dartName}", which "$previous" already uses; Dart type '
+          'names must be unique.',
         );
       } else {
-        enumNames[enumType.name] = enumType.fullName;
+        enumNames[enumType.dartName] = enumType.fullName;
+      }
+    }
+
+    for (final message in contract.messages) {
+      for (final group in message.oneofs) {
+        final name = pascalCase('${message.dartName}.${group.name}');
+        final owner = messageNames[name] ?? enumNames[name];
+        if (owner != null) {
+          problems.add(
+            'The group "${group.name}" of "${message.fullName}" is generated '
+            'into the class "$name", which "$owner" already uses; Dart type '
+            'names must be unique.',
+          );
+        } else {
+          messageNames[name] = '${message.fullName}.${group.name}';
+        }
       }
     }
 
     for (final message in contract.messages) {
       final numbers = <int, String>{};
-      for (final field in message.fields) {
+      for (final field in message.allFields) {
         final previous = numbers[field.number];
         if (previous != null) {
           problems.add(
@@ -138,6 +157,26 @@ class ContractCompiler {
           );
         } else {
           numbers[field.number] = field.name;
+        }
+
+        if (field.isMap) {
+          if (!mapKeyTypes.containsKey(field.mapKeyType)) {
+            problems.add(
+              'Field "${message.fullName}.${field.name}" has a key of the type '
+              '"${field.mapKeyType}"; a key of a map is a string, a boolean or '
+              'an integer.',
+            );
+          }
+          final value = field.mapValueType ?? '';
+          if (!scalarTypes.containsKey(value) &&
+              resolver.findMessage(value) == null &&
+              resolver.findEnum(value) == null) {
+            problems.add(
+              'Field "${message.fullName}.${field.name}" has a value of the '
+              'unknown type "$value".',
+            );
+          }
+          continue;
         }
 
         if (scalarTypes.containsKey(field.type)) {

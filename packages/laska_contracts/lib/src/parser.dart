@@ -1,4 +1,5 @@
 import 'model.dart';
+import 'types.dart';
 
 /// Raised when a contract cannot be parsed.
 class ProtoParseException implements Exception {
@@ -25,11 +26,18 @@ class ProtoParseException implements Exception {
 /// * `syntax`, `package` and `import` declarations (imports are recorded but
 ///   not resolved);
 /// * messages with scalar, message, enum and repeated fields;
+/// * `map` fields;
+/// * groups of a `oneof`;
+/// * messages and enums declared inside a message;
 /// * enums;
 /// * services whose methods may carry a `google.api.http` annotation.
 ///
-/// Constructs that are not part of that subset (`oneof`, `map`, nested
-/// messages, nested enums) raise a [ProtoParseException] instead of being
+/// The types that are written without a qualifier are resolved the way
+/// protobuf resolves them: the scope of the message is searched first, then
+/// the scopes it is declared in, and the types of the file are known.
+///
+/// Constructs that are not part of that subset (`proto2`, the well-known
+/// types, the extensions) raise a [ProtoParseException] instead of being
 /// silently ignored.
 class ProtoParser {
   /// Creates a parser for [source].
@@ -46,11 +54,15 @@ class ProtoParser {
   int _lineStart = 0;
   final List<String> _doc = <String>[];
 
+  /// The messages of the file, nested ones included.
+  final List<Message> _messages = <Message>[];
+
+  /// The enums of the file, nested ones included.
+  final List<EnumType> _enums = <EnumType>[];
+
   /// Parses the source.
   ProtoFile parse() {
     final package = _guessPackage();
-    final messages = <Message>[];
-    final enums = <EnumType>[];
     final services = <Service>[];
     final imports = <String>[];
 
@@ -84,9 +96,9 @@ class ProtoParser {
         case 'option':
           _skipOption();
         case 'message':
-          messages.add(_parseMessage(package));
+          _flatten(_parseMessage(package, ''));
         case 'enum':
-          enums.add(_parseEnum(package));
+          _parseEnum(package, '');
         case 'service':
           services.add(_parseService(package));
         case ';':
@@ -100,11 +112,13 @@ class ProtoParser {
       }
     }
 
+    _resolveTypes(package, services);
+
     return ProtoFile(
       path: fileName,
       package: package,
-      messages: messages,
-      enums: enums,
+      messages: _messages,
+      enums: _enums,
       services: services,
       imports: imports,
     );
@@ -118,13 +132,21 @@ class ProtoParser {
     return match?.group(1) ?? '';
   }
 
-  Message _parseMessage(String package) {
+  /// Parses a message and the declarations it holds.
+  ///
+  /// The [scope] is the scope the message is declared in, e.g. `Order` for a
+  /// message declared inside the message `Order`.
+  _Parsed _parseMessage(String package, String scope) {
     final doc = _takeDoc();
     _expectIdent('message');
     final name = _readIdent();
     _expectChar('{');
 
+    final childScope = scope.isEmpty ? name : '$scope.$name';
     final fields = <Field>[];
+    final oneofs = <Oneof>[];
+    final nested = <_Parsed>[];
+
     while (true) {
       _skipTrivia();
       if (_pos >= source.length) {
@@ -142,35 +164,87 @@ class ProtoParser {
       final word = _peekIdent() ?? '';
       switch (word) {
         case 'message':
-          throw _error('Nested messages are not supported yet (in "$name")');
+          nested.add(_parseMessage(package, childScope));
         case 'enum':
-          throw _error('Nested enums are not supported yet (in "$name")');
+          _parseEnum(package, childScope);
         case 'oneof':
-          throw _error('oneof is not supported yet (in "$name")');
+          oneofs.add(_parseOneof(package));
         case 'map':
-          throw _error('map fields are not supported yet (in "$name")');
+          fields.add(_parseMapField());
         case 'reserved':
           _skipToSemicolon();
         case 'option':
           _takeDoc();
           _skipOption();
+        case 'extend':
+          throw _error('Extensions are not supported yet (in "$name")');
         default:
           fields.add(_parseField());
       }
     }
 
-    return Message(
-      name: name,
-      fields: fields,
-      comment: doc,
-      package: package,
+    return _Parsed(
+      Message(
+        name: name,
+        fields: fields,
+        oneofs: oneofs,
+        comment: doc,
+        package: package,
+        scope: scope,
+      ),
+      nested,
     );
   }
 
-  Field _parseField() {
+  /// Adds a parsed message and the messages it holds to the list of the file.
+  ///
+  /// A message comes before the messages it holds, so the generated code reads
+  /// from the outside in.
+  void _flatten(_Parsed parsed) {
+    _messages.add(parsed.message);
+    for (final child in parsed.nested) {
+      _flatten(child);
+    }
+  }
+
+  /// Parses a group of a `oneof`.
+  Oneof _parseOneof(String package) {
+    final doc = _takeDoc();
+    _expectIdent('oneof');
+    final name = _readIdent();
+    _expectChar('{');
+
+    final fields = <Field>[];
+    while (true) {
+      _skipTrivia();
+      if (_pos >= source.length) {
+        throw _error('Unterminated oneof "$name"');
+      }
+      if (source[_pos] == '}') {
+        _pos++;
+        break;
+      }
+      if (source[_pos] == ';') {
+        _pos++;
+        continue;
+      }
+      if (_peekIdent() == 'option') {
+        _takeDoc();
+        _skipOption();
+        continue;
+      }
+
+      fields.add(_parseField(oneof: name));
+    }
+
+    return Oneof(name: name, fields: fields, comment: doc);
+  }
+
+  /// Parses a field of a message.
+  Field _parseField({String? oneof}) {
     final doc = _takeDoc();
     var repeated = false;
-    var optional = false;
+    var optional = oneof != null;
 
     final label = _peekIdent();
     if (label == 'repeated') {
@@ -200,10 +274,40 @@ class ProtoParser {
       repeated: repeated,
       optional: optional,
       comment: doc,
+      oneof: oneof,
     );
   }
 
-  EnumType _parseEnum(String package) {
+  /// Parses a field of a map, e.g. `map<string, int32> quantities = 3;`.
+  Field _parseMapField() {
+    final doc = _takeDoc();
+    _expectIdent('map');
+    _expectChar('<');
+    final keyType = _readTypeName();
+    _expectChar(',');
+    final valueType = _readTypeName();
+    _expectChar('>');
+
+    final name = _readIdent();
+    _expectChar('=');
+    final number = _readInt();
+    _skipTrivia();
+    if (_pos < source.length && source[_pos] == '[') {
+      _skipBracketBlock();
+    }
+    _expectChar(';');
+
+    return Field(
+      name: name,
+      number: number,
+      type: 'map',
+      mapKeyType: keyType,
+      mapValueType: valueType,
+      comment: doc,
+    );
+  }
+
+  EnumType _parseEnum(String package, String scope) {
     final doc = _takeDoc();
     _expectIdent('enum');
     final name = _readIdent();
@@ -253,12 +357,87 @@ class ProtoParser {
       );
     }
 
-    return EnumType(
+    final enumType = EnumType(
       name: name,
       values: values,
       comment: doc,
       package: package,
+      scope: scope,
     );
+    _enums.add(enumType);
+    return enumType;
+  }
+
+  /// Resolves the types that are written without a qualifier.
+  ///
+  /// The scope of the message is searched first, then the scopes the message
+  /// is declared in, and the types of the file are known. A type that is not
+  /// found is left as it was written: it may belong to another file.
+  void _resolveTypes(String package, List<Service> services) {
+    final local = <String, String>{};
+    for (final message in _messages) {
+      final relative = message.scope.isEmpty
+          ? message.name
+          : '${message.scope}.${message.name}';
+      local[relative] = message.fullName;
+    }
+    for (final enumType in _enums) {
+      final relative = enumType.scope.isEmpty
+          ? enumType.name
+          : '${enumType.scope}.${enumType.name}';
+      local[relative] = enumType.fullName;
+    }
+
+    String qualify(String reference, List<String> scopes) {
+      if (reference.startsWith('.')) {
+        return reference.substring(1);
+      }
+      final known = local[reference];
+      if (known != null) {
+        return known;
+      }
+      for (final scope in scopes) {
+        final resolved = local['$scope.$reference'];
+        if (resolved != null) {
+          return resolved;
+        }
+      }
+      return reference;
+    }
+
+    for (final message in _messages) {
+      final scopes = _scopeChain(message);
+      for (final field in message.allFields) {
+        if (field.isMap) {
+          field.mapValueType = qualify(field.mapValueType!, scopes);
+        } else if (!scalarTypes.containsKey(field.type)) {
+          field.type = qualify(field.type, scopes);
+        }
+      }
+    }
+
+    for (final service in services) {
+      for (final method in service.methods) {
+        method.requestType = qualify(method.requestType, const <String>[]);
+        method.responseType = qualify(method.responseType, const <String>[]);
+      }
+    }
+  }
+
+  /// The scopes the types of a message may be declared in.
+  ///
+  /// The scope of the message comes first — the types declared inside it are
+  /// seen by its fields — and then the scopes the message is declared in.
+  static List<String> _scopeChain(Message message) {
+    final own = message.scope.isEmpty
+        ? message.name
+        : '${message.scope}.${message.name}';
+    final parts = message.scope.isEmpty ? <String>[] : message.scope.split('.');
+
+    return <String>[
+      own,
+      for (var i = parts.length; i > 0; i--) parts.sublist(0, i).join('.'),
+    ];
   }
 
   Service _parseService(String package) {
@@ -818,4 +997,15 @@ class ProtoParser {
 
   static bool _isValueChar(String char) =>
       _isIdentChar(char) || char == '.' || char == '-' || char == '+';
+}
+
+/// A parsed message and the messages it holds.
+class _Parsed {
+  _Parsed(this.message, this.nested);
+
+  /// The message itself.
+  final Message message;
+
+  /// The messages declared inside the message.
+  final List<_Parsed> nested;
 }

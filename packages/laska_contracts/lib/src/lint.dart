@@ -111,6 +111,30 @@ List<LintProblem> _lintFile(ProtoFile file) {
         );
       }
     }
+
+    for (final group in message.oneofs) {
+      if (!isSnakeCase(group.name)) {
+        problems.add(
+          LintProblem(
+            file: file.path,
+            subject: '${message.fullName}.${group.name}',
+            message: 'A group of a oneof is written in snake_case.',
+          ),
+        );
+      }
+
+      for (final member in group.fields) {
+        if (!isSnakeCase(member.name)) {
+          problems.add(
+            LintProblem(
+              file: file.path,
+              subject: '${message.fullName}.${group.name}.${member.name}',
+              message: 'A field is written in snake_case.',
+            ),
+          );
+        }
+      }
+    }
   }
 
   for (final enumType in file.enums) {

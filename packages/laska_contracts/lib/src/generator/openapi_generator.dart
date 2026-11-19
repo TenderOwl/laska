@@ -155,10 +155,10 @@ class OpenApiGenerator {
   Map<String, dynamic> _schemas() {
     final schemas = <String, dynamic>{};
     for (final message in contract.messages) {
-      schemas[pascalCase(message.name)] = _schemaOfMessage(message);
+      schemas[message.dartName] = _schemaOfMessage(message);
     }
     for (final enumType in contract.enums) {
-      schemas[pascalCase(enumType.name)] = <String, dynamic>{
+      schemas[enumType.dartName] = <String, dynamic>{
         'type': 'string',
         'enum': enumType.values.map((value) => value.name).toList(),
       };
@@ -172,21 +172,43 @@ class OpenApiGenerator {
 
     for (final field in message.fields) {
       properties[camelCase(field.name)] = _schemaOfField(field);
-      if (!field.optional && !field.repeated) {
+      if (!field.optional && !field.repeated && !field.isMap) {
         required.add(camelCase(field.name));
       }
+    }
+
+    // The members of a group of a `oneof` are written under their own name,
+    // the way protobuf writes them, and exactly one of them is set.
+    final oneOf = <Map<String, dynamic>>[];
+    for (final group in message.oneofs) {
+      for (final member in group.fields) {
+        properties[camelCase(member.name)] = _schemaOfField(member);
+      }
+      oneOf.add(<String, dynamic>{
+        'required':
+            group.fields.map((member) => camelCase(member.name)).toList(),
+      });
     }
 
     return <String, dynamic>{
       'type': 'object',
       'properties': properties,
       if (required.isNotEmpty) 'required': required,
+      if (oneOf.isNotEmpty) 'oneOf': oneOf,
       'additionalProperties': false,
     };
   }
 
   Map<String, dynamic> _schemaOfField(Field field) {
     final type = _types.resolve(field);
+
+    if (type.isMap) {
+      return <String, dynamic>{
+        'type': 'object',
+        'additionalProperties': _schemaOfType(type.mapValue!.protoType),
+      };
+    }
+
     if (type.isMessage) {
       return <String, dynamic>{
         r'$ref': '#/components/schemas/${type.messageName}',
@@ -206,17 +228,21 @@ class OpenApiGenerator {
   }
 
   Map<String, dynamic> _schemaOfType(String reference) {
+    final scalar = scalarTypes[reference];
+    if (scalar != null) {
+      return _scalarSchema(scalar);
+    }
     final message = _types.findMessage(reference);
     if (message != null) {
       return <String, dynamic>{
-        r'$ref': '#/components/schemas/${pascalCase(message.name)}',
+        r'$ref': '#/components/schemas/${message.dartName}',
       };
     }
     final enumType = _types.findEnum(reference);
     if (enumType != null) {
       return <String, dynamic>{
         'type': 'string',
-        r'$ref': '#/components/schemas/${pascalCase(enumType.name)}',
+        r'$ref': '#/components/schemas/${enumType.dartName}',
       };
     }
     return <String, dynamic>{'type': 'string'};

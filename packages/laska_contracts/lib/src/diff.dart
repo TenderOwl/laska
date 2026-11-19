@@ -97,7 +97,7 @@ ContractDiff diffContracts(Contract base, Contract candidate) {
       );
       continue;
     }
-    _diffMessage(entry.value, updated, changes);
+    _diffMessage(entry.value, updated, changes, base, candidate);
   }
   for (final entry in candidateMessages.entries) {
     if (!baseMessages.containsKey(entry.key)) {
@@ -180,13 +180,37 @@ ContractDiff diffContracts(Contract base, Contract candidate) {
   return ContractDiff(changes);
 }
 
+/// The name of the type a reference points to.
+///
+/// A type is written in a contract without a qualifier as often as it is
+/// written with one, so the references of two versions of a contract are
+/// compared by the type they point to, and not by the way they are written.
+String? _canonicalType(Contract contract, String reference) {
+  final message = contract.message(reference) ??
+      contract.messageBySimpleName(reference.split('.').last);
+  if (message != null) {
+    return message.fullName;
+  }
+  final enumType = contract.enumType(reference) ??
+      contract.enumBySimpleName(reference.split('.').last);
+  if (enumType != null) {
+    return enumType.fullName;
+  }
+  return reference;
+}
+
 void _diffMessage(
-    Message base, Message candidate, List<ContractChange> changes) {
+  Message base,
+  Message candidate,
+  List<ContractChange> changes,
+  Contract baseContract,
+  Contract candidateContract,
+) {
   final candidateFields = <String, Field>{
-    for (final field in candidate.fields) field.name: field,
+    for (final field in candidate.allFields) field.name: field,
   };
 
-  for (final field in base.fields) {
+  for (final field in base.allFields) {
     final updated = candidateFields[field.name];
     if (updated == null) {
       changes.add(
@@ -209,12 +233,25 @@ void _diffMessage(
         ),
       );
     }
-    if (updated.type != field.type) {
+    if (_canonicalType(baseContract, field.type) !=
+        _canonicalType(candidateContract, updated.type)) {
       changes.add(
         ContractChange(
           severity: ChangeSeverity.breaking,
           subject: '${base.fullName}.${field.name}',
           message: 'field type changed from ${field.type} to ${updated.type}',
+        ),
+      );
+    } else if (field.isMap &&
+        updated.isMap &&
+        _canonicalType(baseContract, field.mapValueType!) !=
+            _canonicalType(candidateContract, updated.mapValueType!)) {
+      changes.add(
+        ContractChange(
+          severity: ChangeSeverity.breaking,
+          subject: '${base.fullName}.${field.name}',
+          message: 'the type of the values of the map changed from '
+              '${field.mapValueType} to ${updated.mapValueType}',
         ),
       );
     }
@@ -246,15 +283,97 @@ void _diffMessage(
         ),
       );
     }
+    if (field.oneof != updated.oneof) {
+      changes.add(
+        ContractChange(
+          severity: ChangeSeverity.breaking,
+          subject: '${base.fullName}.${field.name}',
+          message: field.oneof == null
+              ? 'field moved into the oneof "${updated.oneof}"'
+              : updated.oneof == null
+                  ? 'field moved out of the oneof "${field.oneof}"'
+                  : 'field moved from the oneof "${field.oneof}" into the '
+                      'oneof "${updated.oneof}"',
+        ),
+      );
+    }
   }
 
-  for (final field in candidate.fields) {
+  for (final field in candidate.allFields) {
     if (base.field(field.name) == null) {
       changes.add(
         ContractChange(
           severity: ChangeSeverity.nonBreaking,
           subject: '${base.fullName}.${field.name}',
           message: 'field was added',
+        ),
+      );
+    }
+  }
+
+  _diffOneofs(base, candidate, changes);
+}
+
+/// Compares the groups of a `oneof` of two versions of a message.
+///
+/// A member that leaves a group, and a member that joins a group that already
+/// exists, break the consumers: the code that sets the group has to know
+/// about the new member.
+void _diffOneofs(
+  Message base,
+  Message candidate,
+  List<ContractChange> changes,
+) {
+  final candidateGroups = <String, Oneof>{
+    for (final group in candidate.oneofs) group.name: group,
+  };
+
+  for (final group in base.oneofs) {
+    final updated = candidateGroups[group.name];
+    if (updated == null) {
+      changes.add(
+        ContractChange(
+          severity: ChangeSeverity.breaking,
+          subject: '${base.fullName}.${group.name}',
+          message: 'oneof was removed',
+        ),
+      );
+      continue;
+    }
+
+    final updatedMembers = updated.fields.map((field) => field.name).toSet();
+    for (final member in group.fields) {
+      if (!updatedMembers.contains(member.name)) {
+        changes.add(
+          ContractChange(
+            severity: ChangeSeverity.breaking,
+            subject: '${base.fullName}.${group.name}.${member.name}',
+            message: 'member of the oneof was removed',
+          ),
+        );
+      }
+    }
+
+    for (final member in updated.fields) {
+      if (!group.fields.any((existing) => existing.name == member.name)) {
+        changes.add(
+          ContractChange(
+            severity: ChangeSeverity.breaking,
+            subject: '${base.fullName}.${group.name}.${member.name}',
+            message: 'a field was added to the oneof',
+          ),
+        );
+      }
+    }
+  }
+
+  for (final group in candidate.oneofs) {
+    if (!base.oneofs.any((existing) => existing.name == group.name)) {
+      changes.add(
+        ContractChange(
+          severity: ChangeSeverity.nonBreaking,
+          subject: '${base.fullName}.${group.name}',
+          message: 'oneof was added',
         ),
       );
     }

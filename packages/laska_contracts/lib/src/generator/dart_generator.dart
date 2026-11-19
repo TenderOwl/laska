@@ -52,7 +52,7 @@ class DartGenerator {
       ).format(source);
     } on FormatterException catch (error) {
       throw StateError(
-        'Generated code is not valid Dart: ${error.message}',
+        'Generated code is not valid Dart: ${error.message()}',
       );
     }
   }
@@ -124,6 +124,7 @@ class DartGenerator {
       for (final message in messages) {
         _writeMessage(writer, message);
         writer.blank();
+        _writeOneofGroups(writer, message);
       }
     }
 
@@ -266,7 +267,7 @@ class DartGenerator {
   }
 
   void _writeEnum(_Writer writer, EnumType enumType) {
-    final name = pascalCase(enumType.name);
+    final name = enumType.dartName;
     _writeDoc(writer, enumType.comment, name);
 
     writer.write('enum $name {');
@@ -338,7 +339,7 @@ class DartGenerator {
   }
 
   void _writeMessage(_Writer writer, Message message) {
-    final name = pascalCase(message.name);
+    final name = message.dartName;
     _writeDoc(writer, message.comment, name);
 
     writer.write('class $name {');
@@ -348,6 +349,9 @@ class DartGenerator {
     writer.indent();
     for (final field in message.fields) {
       writer.write('${_constructorParameter(field)},');
+    }
+    for (final group in message.oneofs) {
+      writer.write('this.${camelCase(group.name)},');
     }
     writer.dedent();
     writer.write('});');
@@ -360,6 +364,15 @@ class DartGenerator {
           : type.dartType;
       _writeDoc(writer, field.comment, null);
       writer.write('final $dartType ${camelCase(field.name)};');
+    }
+    for (final group in message.oneofs) {
+      writer.blank();
+      writer.write('/// The group of the oneof `${group.name}`.');
+      writer.write('///');
+      writer.write('/// Only one member of the group carries a value.');
+      writer.write(
+        'final ${_oneofName(message, group)}? ${camelCase(group.name)};',
+      );
     }
     writer.blank();
 
@@ -374,6 +387,12 @@ class DartGenerator {
     for (final field in message.fields) {
       writer.write('${camelCase(field.name)}: ${_fieldValue(field)},');
     }
+    for (final group in message.oneofs) {
+      writer.write(
+        '${camelCase(group.name)}: '
+        '${_oneofName(message, group)}.fromJson(json),',
+      );
+    }
     writer.dedent();
     writer.write(');');
     writer.dedent();
@@ -381,13 +400,183 @@ class DartGenerator {
     writer.blank();
 
     writer.write('/// The JSON representation of the $name.');
+    if (message.oneofs.isEmpty) {
+      writer.write('Map<String, dynamic> toJson() => <String, dynamic>{');
+      writer.indent();
+      _writeJsonFields(writer, message);
+      writer.dedent();
+      writer.write('};');
+    } else {
+      writer.write('Map<String, dynamic> toJson() {');
+      writer.indent();
+      for (final group in message.oneofs) {
+        final property = camelCase(group.name);
+        writer.write('final ${property}Value = $property;');
+      }
+      writer.write('return <String, dynamic>{');
+      writer.indent();
+      _writeJsonFields(writer, message);
+      writer.dedent();
+      writer.write('};');
+      writer.dedent();
+      writer.write('}');
+    }
+    writer.blank();
+
+    _writeProtoWriter(writer, message);
+    _writeProtoReader(writer, message);
+
+    writer.dedent();
+    writer.write('}');
+  }
+
+  /// Writes the group of a `oneof` and the classes of its members.
+  void _writeOneofGroups(_Writer writer, Message message) {
+    for (final group in message.oneofs) {
+      _writeOneofGroup(writer, message, group);
+      writer.blank();
+    }
+  }
+
+  /// Writes the class of the group of a `oneof`.
+  void _writeOneofGroup(_Writer writer, Message message, Oneof group) {
+    final groupName = _oneofName(message, group);
+
+    writer.write(
+      '/// The group of the oneof `${group.name}` of the '
+      '`${message.dartName}` message.',
+    );
+    writer.write('///');
+    writer
+        .write('/// The members of the group are exclusive: only one of them');
+    writer.write('/// carries a value.');
+    writer.write('sealed class $groupName {');
+    writer.indent();
+    writer.write('const $groupName();');
+    writer.blank();
+    writer.write('/// The name of the member of the group that is set.');
+    writer.write('String get memberName;');
+    writer.blank();
+    writer.write('/// The JSON representation of the member that is set.');
+    writer.write('Map<String, dynamic> toJson();');
+    writer.blank();
+    writer.write('/// Reads the group out of the JSON of a message.');
+    writer.write('///');
+    writer.write('/// Returns `null` when no member of the group is set.');
+    writer.write('static $groupName? fromJson(Map<String, dynamic> json) {');
+    writer.indent();
+
+    for (final member in group.fields) {
+      final type = _types.resolve(member);
+      final key = camelCase(member.name);
+      final memberName = _oneofMemberName(message, group, member);
+      final path = '${message.dartName}.${group.name}.$key';
+
+      writer.write("if (json.containsKey('$key')) {");
+      writer.indent();
+      writer.write("final value = json['$key'];");
+      if (type.isMessage) {
+        writer.write('if (value is! Map<String, dynamic>) {');
+        writer.indent();
+        writer.write(
+          "throw const FormatException('$path must be an object');",
+        );
+        writer.dedent();
+        writer.write('}');
+        writer.write(
+          'return $memberName(${type.messageName}.fromJson(value));',
+        );
+      } else if (type.isEnum) {
+        writer.write(
+          "return $memberName(${type.enumName}.fromName(value, "
+          "field: '$path'));",
+        );
+      } else {
+        writer.write('if (value is! ${type.dartType}) {');
+        writer.indent();
+        writer.write(
+          "throw const FormatException('$path must be of type "
+          "${type.dartType}');",
+        );
+        writer.dedent();
+        writer.write('}');
+        writer.write('return $memberName(value);');
+      }
+      writer.dedent();
+      writer.write('}');
+    }
+
+    writer.write('return null;');
+    writer.dedent();
+    writer.write('}');
+    writer.dedent();
+    writer.write('}');
+    writer.blank();
+
+    for (final member in group.fields) {
+      _writeOneofMember(writer, message, group, member);
+    }
+  }
+
+  /// Writes the class of a member of a group of a `oneof`.
+  void _writeOneofMember(
+    _Writer writer,
+    Message message,
+    Oneof group,
+    Field member,
+  ) {
+    final type = _types.resolve(member);
+    final memberName = _oneofMemberName(message, group, member);
+    final key = camelCase(member.name);
+
+    writer.write(
+      '/// The member `$key` of the group `${group.name}` of the '
+      '`${message.dartName}` message.',
+    );
+    writer.write('class $memberName extends ${_oneofName(message, group)} {');
+    writer.indent();
+    writer.write('const $memberName(this.value);');
+    writer.blank();
+    writer.write('/// The value of the member.');
+    writer.write('final ${type.dartType} value;');
+    writer.blank();
+    writer.write('@override');
+    writer.write("String get memberName => '$key';");
+    writer.blank();
+    writer.write('@override');
     writer.write('Map<String, dynamic> toJson() => <String, dynamic>{');
     writer.indent();
+    if (type.isMessage) {
+      writer.write("'$key': value.toJson(),");
+    } else if (type.isEnum) {
+      writer.write("'$key': value.protoName,");
+    } else {
+      writer.write("'$key': value,");
+    }
+    writer.dedent();
+    writer.write('};');
+    writer.dedent();
+    writer.write('}');
+    writer.blank();
+  }
+
+  /// The name of the class of the group of a `oneof`.
+  String _oneofName(Message message, Oneof group) =>
+      pascalCase('${message.dartName}.${group.name}');
+
+  /// The name of the class of a member of a group of a `oneof`.
+  String _oneofMemberName(Message message, Oneof group, Field member) =>
+      pascalCase('${message.dartName}.${group.name}.${member.name}');
+
+  /// Writes the fields of a message in the JSON representation.
+  void _writeJsonFields(_Writer writer, Message message) {
     for (final field in message.fields) {
       final type = _types.resolve(field);
       final key = camelCase(field.name);
       final property = camelCase(field.name);
-      if (type.isEnum && !field.repeated) {
+      if (type.isMap) {
+        _writeMapToJson(writer, message, field, type);
+      } else if (type.isEnum && !field.repeated) {
         writer.write("'$key': $property.protoName,");
       } else if (type.isEnum && field.repeated) {
         writer
@@ -404,16 +593,11 @@ class DartGenerator {
         writer.write("'$key': $property,");
       }
     }
-    writer.dedent();
-    writer.write('};');
-    writer.dedent();
-    writer.blank();
-
-    _writeProtoWriter(writer, message);
-    _writeProtoReader(writer, message);
-
-    writer.dedent();
-    writer.write('}');
+    for (final group in message.oneofs) {
+      final property = camelCase(group.name);
+      writer
+          .write('if (${property}Value != null) ...${property}Value.toJson(),');
+    }
   }
 
   /// Writes the method that holds the bytes of the message.
@@ -424,8 +608,15 @@ class DartGenerator {
     writer.write('List<int> toProtoBytes() {');
     writer.indent();
     writer.write('final writer = ProtoWriter();');
+    for (final group in message.oneofs) {
+      final property = camelCase(group.name);
+      writer.write('final ${property}Value = $property;');
+    }
     for (final field in message.fields) {
       _writeProtoValue(writer, message, field);
+    }
+    for (final group in message.oneofs) {
+      _writeOneofValue(writer, message, group);
     }
     writer.write('return writer.toBytes();');
     writer.dedent();
@@ -433,9 +624,38 @@ class DartGenerator {
     writer.blank();
   }
 
+  /// Writes the code that puts the member of a group of a `oneof` on the wire.
+  void _writeOneofValue(_Writer writer, Message message, Oneof group) {
+    final property = '${camelCase(group.name)}Value';
+
+    for (final member in group.fields) {
+      final type = _types.resolve(member);
+      final memberName = _oneofMemberName(message, group, member);
+
+      writer.write('if ($property is $memberName) {');
+      writer.indent();
+      if (type.isMessage) {
+        writer.write(
+          'writer.writeMessage(${member.number}, '
+          '$property.value.toProtoBytes());',
+        );
+      } else if (type.isEnum) {
+        writer.write(
+          'writer.writeEnum(${member.number}, $property.value.number);',
+        );
+      } else {
+        writer.write(
+          'writer.${_protoWriterOf(type)}(${member.number}, $property.value);',
+        );
+      }
+      writer.dedent();
+      writer.write('}');
+    }
+  }
+
   /// Writes the method that reads the message out of its bytes.
   void _writeProtoReader(_Writer writer, Message message) {
-    final name = pascalCase(message.name);
+    final name = message.dartName;
     writer.write(
       '/// Reads a message out of the wire format of the protocol buffers.',
     );
@@ -446,12 +666,14 @@ class DartGenerator {
     for (final field in message.fields) {
       final type = _types.resolve(field);
       final property = camelCase(field.name);
-      if (field.repeated) {
+      if (field.isMap) {
+        writer.write('var $property = <${_mapArguments(type.dartType)}>{};');
+      } else if (field.repeated) {
         writer.write('var $property = <${_elementType(type.dartType)}>[];');
       } else if (field.optional) {
-        writer.write('var $property = <${type.dartType}>?;');
+        writer.write('${type.dartType}? $property;');
       } else if (type.isMessage) {
-        writer.write('var $property = <${type.dartType}>?;');
+        writer.write('${type.dartType}? $property;');
       } else if (type.isEnum) {
         writer.write(
           'var $property = ${type.enumName}.'
@@ -460,6 +682,9 @@ class DartGenerator {
       } else {
         writer.write('var $property = ${_defaultOf(type)};');
       }
+    }
+    for (final group in message.oneofs) {
+      writer.write('${_oneofName(message, group)}? ${camelCase(group.name)};');
     }
     writer.blank();
 
@@ -473,6 +698,9 @@ class DartGenerator {
       _writeProtoRead(writer, message, field);
       writer.dedent();
     }
+    for (final group in message.oneofs) {
+      _writeOneofRead(writer, message, group);
+    }
     writer.write('default:');
     writer.indent();
     writer.write('reader.skipField();');
@@ -485,7 +713,10 @@ class DartGenerator {
 
     for (final field in message.fields) {
       final type = _types.resolve(field);
-      if (type.isMessage && !field.repeated && !field.optional) {
+      if (type.isMessage &&
+          !field.repeated &&
+          !field.optional &&
+          !field.isMap) {
         final property = camelCase(field.name);
         writer.write('if ($property == null) {');
         writer.indent();
@@ -504,10 +735,43 @@ class DartGenerator {
       final property = camelCase(field.name);
       writer.write('$property: $property,');
     }
+    for (final group in message.oneofs) {
+      final property = camelCase(group.name);
+      writer.write('$property: $property,');
+    }
     writer.dedent();
     writer.write(');');
     writer.dedent();
     writer.write('}');
+  }
+
+  /// Writes the code that reads the member of a group of a `oneof`.
+  void _writeOneofRead(_Writer writer, Message message, Oneof group) {
+    final property = camelCase(group.name);
+
+    for (final member in group.fields) {
+      final type = _types.resolve(member);
+      final memberName = _oneofMemberName(message, group, member);
+
+      writer.write('case ${member.number}:');
+      writer.indent();
+      if (type.isMessage) {
+        writer.write(
+          '$property = $memberName('
+          '${type.messageName}.fromProtoBytes(reader.readBytes()));',
+        );
+      } else if (type.isEnum) {
+        writer.write(
+          '$property = $memberName('
+          '${type.enumName}.fromNumber(reader.readEnum()));',
+        );
+      } else {
+        writer.write(
+          '$property = $memberName(reader.${_protoReaderOf(type)}());',
+        );
+      }
+      writer.dedent();
+    }
   }
 
   /// Writes the code that puts the value of a field on the wire.
@@ -515,6 +779,11 @@ class DartGenerator {
     final type = _types.resolve(field);
     final property = camelCase(field.name);
     final number = field.number;
+
+    if (field.isMap) {
+      _writeMapValue(writer, field, type, number);
+      return;
+    }
 
     if (field.repeated) {
       writer.write('for (final item in $property) {');
@@ -571,10 +840,113 @@ class DartGenerator {
     writer.write('}');
   }
 
+  /// Writes the code that puts the entries of a map on the wire.
+  ///
+  /// A map is a repeated message on the wire: every entry holds the key in
+  /// the field 1 and the value in the field 2.
+  void _writeMapValue(
+    _Writer writer,
+    Field field,
+    DartType type,
+    int number,
+  ) {
+    final property = camelCase(field.name);
+    final value = type.mapValue!;
+    final key = DartType(
+      dartType: mapKeyTypes[field.mapKeyType!]!,
+      protoType: field.mapKeyType!,
+    );
+
+    writer.write('for (final entry in $property.entries) {');
+    writer.indent();
+    writer.write('final entryWriter = ProtoWriter();');
+    writer.write('entryWriter.${_protoWriterOf(key)}(1, entry.key);');
+    if (value.isMessage) {
+      writer.write('entryWriter.writeMessage(2, entry.value.toProtoBytes());');
+    } else if (value.isEnum) {
+      writer.write('entryWriter.writeEnum(2, entry.value.number);');
+    } else {
+      writer.write('entryWriter.${_protoWriterOf(value)}(2, entry.value);');
+    }
+    writer.write('writer.writeMessage($number, entryWriter.toBytes());');
+    writer.dedent();
+    writer.write('}');
+  }
+
+  /// Writes the code that reads the entries of a map from the wire.
+  void _writeMapRead(_Writer writer, Field field, DartType type) {
+    final property = camelCase(field.name);
+    final value = type.mapValue!;
+    final key = DartType(
+      dartType: mapKeyTypes[field.mapKeyType!]!,
+      protoType: field.mapKeyType!,
+    );
+    final suffix = pascalCase(field.name);
+    final keyName = 'mapEntryKey$suffix';
+    final valueName = 'mapEntryValue$suffix';
+
+    writer.write('final entryReader = ProtoReader(reader.readBytes());');
+    writer.write('var $keyName = ${_defaultOf(key)};');
+    if (value.isMessage) {
+      writer.write('${value.dartType}? $valueName;');
+    } else if (value.isEnum) {
+      writer.write(
+        'var $valueName = ${value.enumName}.'
+        '${enumConstantName(_enumOf(value).values.first.name)};',
+      );
+    } else {
+      writer.write('var $valueName = ${_defaultOf(value)};');
+    }
+    writer.write('while (entryReader.hasNext) {');
+    writer.indent();
+    writer.write('final entryTag = entryReader.readTag();');
+    writer.write('switch (entryTag) {');
+    writer.write('case 1:');
+    writer.indent();
+    writer.write('$keyName = entryReader.${_protoReaderOf(key)}();');
+    writer.dedent();
+    writer.write('case 2:');
+    writer.indent();
+    if (value.isMessage) {
+      writer.write(
+        '$valueName = ${value.messageName}'
+        '.fromProtoBytes(entryReader.readBytes());',
+      );
+    } else if (value.isEnum) {
+      writer.write(
+        '$valueName = ${value.enumName}.fromNumber(entryReader.readEnum());',
+      );
+    } else {
+      writer.write('$valueName = entryReader.${_protoReaderOf(value)}();');
+    }
+    writer.dedent();
+    writer.write('default:');
+    writer.indent();
+    writer.write('entryReader.skipField();');
+    writer.dedent();
+    writer.dedent();
+    writer.write('}');
+    writer.dedent();
+    writer.write('}');
+    if (value.isMessage) {
+      writer.write(
+        '$property[$keyName] = $valueName ?? '
+        '${value.messageName}.fromProtoBytes(const <int>[]);',
+      );
+    } else {
+      writer.write('$property[$keyName] = $valueName;');
+    }
+  }
+
   /// Writes the code that reads the value of a field from the wire.
   void _writeProtoRead(_Writer writer, Message message, Field field) {
     final type = _types.resolve(field);
     final property = camelCase(field.name);
+
+    if (field.isMap) {
+      _writeMapRead(writer, field, type);
+      return;
+    }
 
     if (field.repeated) {
       if (type.isMessage) {
@@ -761,8 +1133,13 @@ class DartGenerator {
   void _writeFieldParser(_Writer writer, Message message, Field field) {
     final type = _types.resolve(field);
     final key = camelCase(field.name);
-    final name = pascalCase(message.name);
+    final name = message.dartName;
     final property = camelCase(field.name);
+
+    if (field.isMap) {
+      _writeMapParser(writer, field, type, key, name);
+      return;
+    }
 
     if (type.isEnum && !field.repeated) {
       writer.write(
@@ -837,9 +1214,86 @@ class DartGenerator {
     writer.write('}');
   }
 
+  /// Writes the code that reads a map out of the JSON of a message.
+  void _writeMapParser(
+    _Writer writer,
+    Field field,
+    DartType type,
+    String key,
+    String name,
+  ) {
+    final property = camelCase(field.name);
+    final value = type.mapValue!;
+
+    writer.write("final $property = json['$key'];");
+    writer.write("if ($property != null && $property is! Map) {");
+    writer.indent();
+    writer.write(
+      "throw const FormatException('$name.$key must be an object');",
+    );
+    writer.dedent();
+    writer.write('}');
+    writer.write(
+      'final ${property}Value = '
+      '<${mapKeyTypes[field.mapKeyType!]}, ${value.dartType}>{};',
+    );
+    writer.write('if ($property != null) {');
+    writer.indent();
+    writer.write('$property.forEach((mapKey, mapValue) {');
+    writer.indent();
+    if (value.isMessage) {
+      writer.write(
+        '${property}Value[mapKey as String] = '
+        '${value.messageName}.fromJson(mapValue as Map<String, dynamic>);',
+      );
+    } else if (value.isEnum) {
+      writer.write(
+        '${property}Value[mapKey as String] = '
+        '${value.enumName}.fromName(mapValue, field: \'$name.$key\');',
+      );
+    } else {
+      writer.write(
+        '${property}Value[mapKey as String] = mapValue as ${value.dartType};',
+      );
+    }
+    writer.dedent();
+    writer.write('});');
+    writer.dedent();
+    writer.write('}');
+  }
+
+  /// Writes the JSON representation of a map.
+  void _writeMapToJson(
+    _Writer writer,
+    Message message,
+    Field field,
+    DartType type,
+  ) {
+    final key = camelCase(field.name);
+    final property = camelCase(field.name);
+    final value = type.mapValue!;
+
+    if (value.isMessage) {
+      writer.write(
+        "'$key': $property.map((mapKey, mapValue) => "
+        'MapEntry(mapKey, mapValue.toJson())),',
+      );
+    } else if (value.isEnum) {
+      writer.write(
+        "'$key': $property.map((mapKey, mapValue) => "
+        'MapEntry(mapKey, mapValue.protoName)),',
+      );
+    } else {
+      writer.write("'$key': $property,");
+    }
+  }
+
   String _fieldValue(Field field) {
     final type = _types.resolve(field);
     final property = camelCase(field.name);
+    if (field.isMap) {
+      return '${property}Value';
+    }
     if (type.isEnum || type.isMessage) {
       return '${property}Value';
     }
@@ -857,6 +1311,9 @@ class DartGenerator {
   String _constructorParameter(Field field) {
     final type = _types.resolve(field);
     final property = camelCase(field.name);
+    if (field.isMap) {
+      return 'this.$property = const <${_mapArguments(type.dartType)}>{}';
+    }
     if (field.repeated) {
       final element = _elementType(type.dartType);
       return 'this.$property = const <$element>[]';
@@ -1366,6 +1823,14 @@ class DartGenerator {
     return dartType;
   }
 
+  /// The arguments of a map, e.g. `String, int` for `Map<String, int>`.
+  String _mapArguments(String dartType) {
+    if (dartType.startsWith('Map<') && dartType.endsWith('>')) {
+      return dartType.substring(4, dartType.length - 1);
+    }
+    return dartType;
+  }
+
   Field _requestField(Method method) {
     final message = _types.findMessage(method.requestType);
     if (message == null) {
@@ -1394,7 +1859,7 @@ class DartGenerator {
     if (message == null) {
       return const <Field>[];
     }
-    return message.fields;
+    return message.allFields;
   }
 
   Field? _fieldNamed(Field requestField, String name) {
@@ -1414,8 +1879,12 @@ class DartGenerator {
 
     final referenced = <String>{};
     for (final message in file.messages) {
-      for (final field in message.fields) {
-        referenced.add(field.type);
+      for (final field in message.allFields) {
+        if (field.isMap) {
+          referenced.add(field.mapValueType!);
+        } else {
+          referenced.add(field.type);
+        }
       }
     }
     for (final service in file.services) {

@@ -1,5 +1,4 @@
 import 'model.dart';
-import 'naming.dart';
 
 /// Dart type information of a contract type.
 class DartType {
@@ -11,6 +10,9 @@ class DartType {
     this.isEnum = false,
     this.messageName,
     this.enumName,
+    this.isMap = false,
+    this.mapKeyType,
+    this.mapValue,
   });
 
   /// The Dart type as it is written in generated code, e.g. `List<String>`.
@@ -30,6 +32,15 @@ class DartType {
 
   /// Name of the Dart enum of the referenced enum.
   final String? enumName;
+
+  /// Whether the type is a map.
+  final bool isMap;
+
+  /// The type of the key of a map, as it is written in the contract.
+  final String? mapKeyType;
+
+  /// The type of the value of a map.
+  final DartType? mapValue;
 }
 
 /// The scalar types of proto3 and their Dart counterparts.
@@ -51,6 +62,24 @@ const Map<String, String> scalarTypes = <String, String>{
   'double': 'double',
 };
 
+/// The types a key of a map may have, and their Dart counterparts.
+///
+/// Protobuf allows the integer types, `bool` and `string` as the key of a map.
+const Map<String, String> mapKeyTypes = <String, String>{
+  'string': 'String',
+  'bool': 'bool',
+  'int32': 'int',
+  'int64': 'int',
+  'uint32': 'int',
+  'uint64': 'int',
+  'sint32': 'int',
+  'sint64': 'int',
+  'fixed32': 'int',
+  'fixed64': 'int',
+  'sfixed32': 'int',
+  'sfixed64': 'int',
+};
+
 /// Resolves contract types to Dart types.
 class TypeResolver {
   /// Creates a resolver for [contract].
@@ -61,37 +90,56 @@ class TypeResolver {
 
   /// Resolves the type of [field].
   DartType resolve(Field field) {
-    final scalar = scalarTypes[field.type];
+    if (field.isMap) {
+      return _resolveMap(field);
+    }
+
+    final type = resolveTypeName(field.type);
+    if (!field.repeated) {
+      return type;
+    }
+
+    return DartType(
+      dartType: 'List<${type.dartType}>',
+      protoType: type.protoType,
+      isMessage: type.isMessage,
+      isEnum: type.isEnum,
+      messageName: type.messageName,
+      enumName: type.enumName,
+    );
+  }
+
+  /// Resolves the type of the name [name], as it is written in a contract.
+  ///
+  /// The name may be a scalar, a message or an enum, and it may be qualified
+  /// with the scope it was declared in.
+  DartType resolveTypeName(String name) {
+    final scalar = scalarTypes[name];
     if (scalar != null) {
-      return DartType(
-        dartType: field.repeated ? 'List<$scalar>' : scalar,
-        protoType: field.type,
-      );
+      return DartType(dartType: scalar, protoType: name);
     }
 
-    final message = _findMessage(field.type);
+    final message = _findMessage(name);
     if (message != null) {
-      final name = pascalCase(message.name);
       return DartType(
-        dartType: field.repeated ? 'List<$name>' : name,
-        protoType: field.type,
+        dartType: message.dartName,
+        protoType: name,
         isMessage: true,
-        messageName: name,
+        messageName: message.dartName,
       );
     }
 
-    final enumType = _findEnum(field.type);
+    final enumType = _findEnum(name);
     if (enumType != null) {
-      final name = pascalCase(enumType.name);
       return DartType(
-        dartType: field.repeated ? 'List<$name>' : name,
-        protoType: field.type,
+        dartType: enumType.dartName,
+        protoType: name,
         isEnum: true,
-        enumName: name,
+        enumName: enumType.dartName,
       );
     }
 
-    throw StateError('Unknown contract type "${field.type}"');
+    throw StateError('Unknown contract type "$name"');
   }
 
   /// Finds the message a type reference points to.
@@ -99,6 +147,27 @@ class TypeResolver {
 
   /// Finds the enum a type reference points to.
   EnumType? findEnum(String reference) => _findEnum(reference);
+
+  /// Resolves the type of a map field.
+  DartType _resolveMap(Field field) {
+    final key = mapKeyTypes[field.mapKeyType];
+    if (key == null) {
+      throw StateError(
+        'Unknown type of the key of the map "${field.name}": '
+        '"${field.mapKeyType}"',
+      );
+    }
+
+    final value = resolveTypeName(field.mapValueType!);
+
+    return DartType(
+      dartType: 'Map<$key, ${value.dartType}>',
+      protoType: 'map',
+      isMap: true,
+      mapKeyType: field.mapKeyType,
+      mapValue: value,
+    );
+  }
 
   Message? _findMessage(String reference) {
     final byFullName = contract.message(reference);
