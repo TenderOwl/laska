@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'packages.dart';
+
 /// Publishes the packages of the workspace to pub.dev.
 ///
 /// The packages of the workspace carry `resolution: workspace`, and a package
@@ -36,7 +38,7 @@ Future<void> main(List<String> arguments) async {
     exit(1);
   }
 
-  final packages = options.all ? _packages : options.packages;
+  final packages = options.all ? publishedPackages : options.packages;
   if (packages.isEmpty) {
     stderr.writeln('Nothing to publish. Pass --package or --all.');
     exit(64);
@@ -155,14 +157,6 @@ class _Options {
   }
 }
 
-/// The packages of the workspace, in the order they are published.
-const List<String> _packages = <String>[
-  'laska_core',
-  'laska_contracts',
-  'laska_test',
-  'laska_cli',
-];
-
 /// Whether the tree of the repository holds no change.
 bool _treeIsClean() {
   final result = Process.runSync(
@@ -228,7 +222,7 @@ void _useLocalDependencies(Directory staged) {
   final pubspec = File('${staged.path}/pubspec.yaml');
 
   final rewritten = pubspec.readAsLinesSync().map((line) {
-    for (final package in _packages) {
+    for (final package in publishedPackages) {
       if (line.startsWith('  $package: ^')) {
         return '  $package: {path: $root/packages/$package}';
       }
