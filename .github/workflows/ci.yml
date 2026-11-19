@@ -19,6 +19,10 @@ jobs:
         with:
           sdk: 3.14
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
       - name: Resolve dependencies
         run: dart pub get
 

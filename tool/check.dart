@@ -15,10 +15,11 @@ Future<void> main() async {
     String label,
     List<String> arguments, {
     String? workingDirectory,
+    String? executable,
   }) async {
     stdout.writeln('==> $label');
     final result = await Process.run(
-      Platform.resolvedExecutable,
+      executable ?? Platform.resolvedExecutable,
       arguments,
       workingDirectory: workingDirectory ?? root.path,
     );
@@ -59,11 +60,103 @@ Future<void> main() async {
     );
   }
 
+  // The SDK of the example is written in Go, so it is tested with the
+  // toolchain of Go. The gate of the repository runs the tests of every
+  // language the framework speaks, and the toolchain of Go is skipped when it
+  // is not installed.
+  final go = _executableOnPath('go');
+  if (go == null) {
+    stdout.writeln(
+      'the toolchain of Go is not installed: the tests of the Go SDK are '
+      'skipped',
+    );
+  } else {
+    final sdk = '${root.path}/example/contract_slice/go';
+
+    final gofmt = _executableOnPath('gofmt') ?? 'gofmt';
+    if (!checkGoFormat(gofmt, sdk)) {
+      failed = true;
+    }
+
+    await run(
+      'vet: the Go SDK',
+      <String>['vet', './...'],
+      workingDirectory: sdk,
+      executable: go,
+    );
+    await run(
+      'test: the Go SDK',
+      <String>['test', './...'],
+      workingDirectory: sdk,
+      executable: go,
+    );
+  }
+
   if (failed) {
     stderr.writeln('Some checks failed.');
     exit(1);
   }
   stdout.writeln('All checks passed.');
+}
+
+/// Checks that the Go code of the SDK in [directory] is formatted.
+///
+/// The formatter prints the files that are not formatted, so the check reads
+/// what it prints instead of its exit code.
+bool checkGoFormat(String gofmt, String directory) {
+  stdout.writeln('==> format: the Go SDK');
+
+  final result = Process.runSync(
+    gofmt,
+    <String>['-l', '.'],
+    workingDirectory: directory,
+  );
+  stdout.write(result.stdout);
+  stderr.write(result.stderr);
+
+  if (result.exitCode != 0) {
+    stderr.writeln('FAILED: format: the Go SDK');
+    return false;
+  }
+
+  final files = '${result.stdout}'.trim();
+  if (files.isNotEmpty) {
+    stderr.writeln('FAILED: format: the Go SDK');
+    stderr.writeln('  the files that are not formatted:');
+    for (final file in files.split('\n')) {
+      stderr.writeln('    $file');
+    }
+    return false;
+  }
+
+  stdout.writeln('the Go SDK is formatted');
+  return true;
+}
+
+/// Finds the program [name] on the path of the system.
+///
+/// Returns `null` when the program is not installed.
+String? _executableOnPath(String name) {
+  final path = Platform.environment['PATH'] ?? '';
+  final separator = Platform.isWindows ? ';' : ':';
+  final extensions = Platform.isWindows
+      ? const <String>['.exe', '.bat', '.cmd', '']
+      : const <String>[''];
+
+  for (final directory in path.split(separator)) {
+    final trimmed = directory.trim();
+    if (trimmed.isEmpty) {
+      continue;
+    }
+    for (final extension in extensions) {
+      final candidate =
+          File('$trimmed${Platform.pathSeparator}$name$extension');
+      if (candidate.existsSync()) {
+        return candidate.path;
+      }
+    }
+  }
+  return null;
 }
 
 /// Checks that the published packages hold one version, and that the version
