@@ -27,9 +27,8 @@ Future<Database> openDatabase({
   String? path,
   bool applyMigrations = true,
 }) async {
-  final database = path == null
-      ? SqliteDatabase.memory()
-      : SqliteDatabase.open(path);
+  final database =
+      path == null ? SqliteDatabase.memory() : SqliteDatabase.open(path);
 
   if (applyMigrations) {
     final runner = MigrationRunner(database, directory: migrationsDirectory);

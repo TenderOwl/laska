@@ -149,12 +149,12 @@ class User {
 
   /// The JSON representation of the User.
   Map<String, dynamic> toJson() => <String, dynamic>{
-    'id': id,
-    'email': email,
-    'displayName': displayName,
-    'role': role.protoName,
-    'tags': tags,
-  };
+        'id': id,
+        'email': email,
+        'displayName': displayName,
+        'role': role.protoName,
+        'tags': tags,
+      };
 
   /// The bytes of the message in the wire format of the protocol buffers.
   List<int> toProtoBytes() {
@@ -217,7 +217,9 @@ class User {
 /// Request of the GetUser method.
 class GetUserRequest {
   /// Creates a GetUserRequest.
-  const GetUserRequest({required this.id});
+  const GetUserRequest({
+    required this.id,
+  });
 
   final String id;
 
@@ -227,11 +229,15 @@ class GetUserRequest {
     if (id is! String) {
       throw const FormatException('GetUserRequest.id must be of type String');
     }
-    return GetUserRequest(id: id);
+    return GetUserRequest(
+      id: id,
+    );
   }
 
   /// The JSON representation of the GetUserRequest.
-  Map<String, dynamic> toJson() => <String, dynamic>{'id': id};
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+      };
 
   /// The bytes of the message in the wire format of the protocol buffers.
   List<int> toProtoBytes() {
@@ -257,14 +263,19 @@ class GetUserRequest {
       }
     }
 
-    return GetUserRequest(id: id);
+    return GetUserRequest(
+      id: id,
+    );
   }
 }
 
 /// Request of the ListUsers method.
 class ListUsersRequest {
   /// Creates a ListUsersRequest.
-  const ListUsersRequest({required this.limit, required this.cursor});
+  const ListUsersRequest({
+    required this.limit,
+    required this.cursor,
+  });
 
   final int limit;
   final String cursor;
@@ -278,17 +289,19 @@ class ListUsersRequest {
     final cursor = json['cursor'];
     if (cursor is! String) {
       throw const FormatException(
-        'ListUsersRequest.cursor must be of type String',
-      );
+          'ListUsersRequest.cursor must be of type String');
     }
-    return ListUsersRequest(limit: limit, cursor: cursor);
+    return ListUsersRequest(
+      limit: limit,
+      cursor: cursor,
+    );
   }
 
   /// The JSON representation of the ListUsersRequest.
   Map<String, dynamic> toJson() => <String, dynamic>{
-    'limit': limit,
-    'cursor': cursor,
-  };
+        'limit': limit,
+        'cursor': cursor,
+      };
 
   /// The bytes of the message in the wire format of the protocol buffers.
   List<int> toProtoBytes() {
@@ -320,7 +333,10 @@ class ListUsersRequest {
       }
     }
 
-    return ListUsersRequest(limit: limit, cursor: cursor);
+    return ListUsersRequest(
+      limit: limit,
+      cursor: cursor,
+    );
   }
 }
 
@@ -344,22 +360,23 @@ class ListUsersResponse {
     final usersValue = users == null
         ? const <User>[]
         : List<User>.from(
-            users.map((item) => User.fromJson(item as Map<String, dynamic>)),
-          );
+            users.map((item) => User.fromJson(item as Map<String, dynamic>)));
     final nextCursor = json['nextCursor'];
     if (nextCursor is! String) {
       throw const FormatException(
-        'ListUsersResponse.nextCursor must be of type String',
-      );
+          'ListUsersResponse.nextCursor must be of type String');
     }
-    return ListUsersResponse(users: usersValue, nextCursor: nextCursor);
+    return ListUsersResponse(
+      users: usersValue,
+      nextCursor: nextCursor,
+    );
   }
 
   /// The JSON representation of the ListUsersResponse.
   Map<String, dynamic> toJson() => <String, dynamic>{
-    'users': users.map((item) => item.toJson()).toList(),
-    'nextCursor': nextCursor,
-  };
+        'users': users.map((item) => item.toJson()).toList(),
+        'nextCursor': nextCursor,
+      };
 
   /// The bytes of the message in the wire format of the protocol buffers.
   List<int> toProtoBytes() {
@@ -391,7 +408,10 @@ class ListUsersResponse {
       }
     }
 
-    return ListUsersResponse(users: users, nextCursor: nextCursor);
+    return ListUsersResponse(
+      users: users,
+      nextCursor: nextCursor,
+    );
   }
 }
 
@@ -413,19 +433,15 @@ class CreateUserRequest {
     final email = json['email'];
     if (email is! String) {
       throw const FormatException(
-        'CreateUserRequest.email must be of type String',
-      );
+          'CreateUserRequest.email must be of type String');
     }
     final displayName = json['displayName'];
     if (displayName is! String) {
       throw const FormatException(
-        'CreateUserRequest.displayName must be of type String',
-      );
+          'CreateUserRequest.displayName must be of type String');
     }
-    final roleValue = UserRole.fromName(
-      json['role'],
-      field: 'CreateUserRequest.role',
-    );
+    final roleValue =
+        UserRole.fromName(json['role'], field: 'CreateUserRequest.role');
     return CreateUserRequest(
       email: email,
       displayName: displayName,
@@ -435,10 +451,10 @@ class CreateUserRequest {
 
   /// The JSON representation of the CreateUserRequest.
   Map<String, dynamic> toJson() => <String, dynamic>{
-    'email': email,
-    'displayName': displayName,
-    'role': role.protoName,
-  };
+        'email': email,
+        'displayName': displayName,
+        'role': role.protoName,
+      };
 
   /// The bytes of the message in the wire format of the protocol buffers.
   List<int> toProtoBytes() {
@@ -518,10 +534,8 @@ class Subscription {
       throw const FormatException('Subscription.plan must be an object');
     }
     final planValue = SubscriptionPlan.fromJson(plan);
-    final stateValue = SubscriptionState.fromName(
-      json['state'],
-      field: 'Subscription.state',
-    );
+    final stateValue =
+        SubscriptionState.fromName(json['state'], field: 'Subscription.state');
     final features = json['features'];
     if (features != null && features is! Map) {
       throw const FormatException('Subscription.features must be an object');
@@ -616,8 +630,7 @@ class Subscription {
 
     if (plan == null) {
       throw FormatException(
-        'The message "Subscription" needs the field "plan".',
-      );
+          'The message "Subscription" needs the field "plan".');
     }
     return Subscription(
       plan: plan,
@@ -649,8 +662,7 @@ sealed class SubscriptionPayment {
       final value = json['cardToken'];
       if (value is! String) {
         throw const FormatException(
-          'Subscription.payment.cardToken must be of type String',
-        );
+            'Subscription.payment.cardToken must be of type String');
       }
       return SubscriptionPaymentCardToken(value);
     }
@@ -658,8 +670,7 @@ sealed class SubscriptionPayment {
       final value = json['iban'];
       if (value is! String) {
         throw const FormatException(
-          'Subscription.payment.iban must be of type String',
-        );
+            'Subscription.payment.iban must be of type String');
       }
       return SubscriptionPaymentIban(value);
     }
@@ -678,7 +689,9 @@ class SubscriptionPaymentCardToken extends SubscriptionPayment {
   String get memberName => 'cardToken';
 
   @override
-  Map<String, dynamic> toJson() => <String, dynamic>{'cardToken': value};
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'cardToken': value,
+      };
 }
 
 /// The member `iban` of the group `payment` of the `Subscription` message.
@@ -692,13 +705,18 @@ class SubscriptionPaymentIban extends SubscriptionPayment {
   String get memberName => 'iban';
 
   @override
-  Map<String, dynamic> toJson() => <String, dynamic>{'iban': value};
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'iban': value,
+      };
 }
 
 /// The plan of the subscription.
 class SubscriptionPlan {
   /// Creates a SubscriptionPlan.
-  const SubscriptionPlan({required this.name, required this.seats});
+  const SubscriptionPlan({
+    required this.name,
+    required this.seats,
+  });
 
   final String name;
   final int seats;
@@ -708,21 +726,23 @@ class SubscriptionPlan {
     final name = json['name'];
     if (name is! String) {
       throw const FormatException(
-        'SubscriptionPlan.name must be of type String',
-      );
+          'SubscriptionPlan.name must be of type String');
     }
     final seats = json['seats'];
     if (seats is! int) {
       throw const FormatException('SubscriptionPlan.seats must be of type int');
     }
-    return SubscriptionPlan(name: name, seats: seats);
+    return SubscriptionPlan(
+      name: name,
+      seats: seats,
+    );
   }
 
   /// The JSON representation of the SubscriptionPlan.
   Map<String, dynamic> toJson() => <String, dynamic>{
-    'name': name,
-    'seats': seats,
-  };
+        'name': name,
+        'seats': seats,
+      };
 
   /// The bytes of the message in the wire format of the protocol buffers.
   List<int> toProtoBytes() {
@@ -754,7 +774,10 @@ class SubscriptionPlan {
       }
     }
 
-    return SubscriptionPlan(name: name, seats: seats);
+    return SubscriptionPlan(
+      name: name,
+      seats: seats,
+    );
   }
 }
 
@@ -779,35 +802,47 @@ void registerUsersService(
   UsersService service, {
   List<Middleware> middleware = const <Middleware>[],
 }) {
-  app.get('/v1/users/:id', (ctx) async {
-    final payload = <String, dynamic>{};
-    payload['id'] = ctx.params['id']!;
-    final request = GetUserRequest.fromJson(payload);
-    final response = await service.getUser(request);
-    return ctx.json(response.toJson());
-  }, middleware: middleware);
+  app.get(
+    '/v1/users/:id',
+    (ctx) async {
+      final payload = <String, dynamic>{};
+      payload['id'] = ctx.params['id']!;
+      final request = GetUserRequest.fromJson(payload);
+      final response = await service.getUser(request);
+      return ctx.json(response.toJson());
+    },
+    middleware: middleware,
+  );
 
-  app.get('/v1/users', (ctx) async {
-    final payload = <String, dynamic>{};
-    final query = ctx.query;
-    if (query.containsKey('limit')) {
-      payload['limit'] = parseIntValue(query['limit']!, 'limit');
-    }
-    if (query.containsKey('cursor')) {
-      payload['cursor'] = query['cursor']!;
-    }
-    final request = ListUsersRequest.fromJson(payload);
-    final response = await service.listUsers(request);
-    return ctx.json(response.toJson());
-  }, middleware: middleware);
+  app.get(
+    '/v1/users',
+    (ctx) async {
+      final payload = <String, dynamic>{};
+      final query = ctx.query;
+      if (query.containsKey('limit')) {
+        payload['limit'] = parseIntValue(query['limit']!, 'limit');
+      }
+      if (query.containsKey('cursor')) {
+        payload['cursor'] = query['cursor']!;
+      }
+      final request = ListUsersRequest.fromJson(payload);
+      final response = await service.listUsers(request);
+      return ctx.json(response.toJson());
+    },
+    middleware: middleware,
+  );
 
-  app.post('/v1/users', (ctx) async {
-    final payload = <String, dynamic>{};
-    payload.addAll(ctx.request.json());
-    final request = CreateUserRequest.fromJson(payload);
-    final response = await service.createUser(request);
-    return ctx.json(response.toJson());
-  }, middleware: middleware);
+  app.post(
+    '/v1/users',
+    (ctx) async {
+      final payload = <String, dynamic>{};
+      payload.addAll(ctx.request.json());
+      final request = CreateUserRequest.fromJson(payload);
+      final response = await service.createUser(request);
+      return ctx.json(response.toJson());
+    },
+    middleware: middleware,
+  );
 }
 
 /// The policies of the methods of the `UsersService` service.
@@ -820,46 +855,40 @@ class UsersServicePolicies {
 
   /// The policy of the `GetUser` method.
   static final DependencyPolicy getUser = DependencyPolicy(
-    timeout: Duration(seconds: 2),
-    retry: RetryPolicy(
-      maxAttempts: 3,
-      initialBackoff: Duration(milliseconds: 100),
-      maxBackoff: Duration(seconds: 2),
-      jitter: true,
-    ),
-    idempotent: true,
-  );
+      timeout: Duration(seconds: 2),
+      retry: RetryPolicy(
+          maxAttempts: 3,
+          initialBackoff: Duration(milliseconds: 100),
+          maxBackoff: Duration(seconds: 2),
+          jitter: true),
+      idempotent: true);
 
   /// The policy of the `ListUsers` method.
   static final DependencyPolicy listUsers = DependencyPolicy(
-    timeout: Duration(seconds: 2),
-    retry: RetryPolicy(
-      maxAttempts: 3,
-      initialBackoff: Duration(milliseconds: 100),
-      maxBackoff: Duration(seconds: 2),
-      jitter: true,
-    ),
-    idempotent: true,
-  );
+      timeout: Duration(seconds: 2),
+      retry: RetryPolicy(
+          maxAttempts: 3,
+          initialBackoff: Duration(milliseconds: 100),
+          maxBackoff: Duration(seconds: 2),
+          jitter: true),
+      idempotent: true);
 
   /// The policy of the `CreateUser` method.
   static final DependencyPolicy createUser = DependencyPolicy(
-    timeout: Duration(seconds: 2),
-    retry: RetryPolicy(
-      maxAttempts: 3,
-      initialBackoff: Duration(milliseconds: 100),
-      maxBackoff: Duration(seconds: 2),
-      jitter: true,
-    ),
-  );
+      timeout: Duration(seconds: 2),
+      retry: RetryPolicy(
+          maxAttempts: 3,
+          initialBackoff: Duration(milliseconds: 100),
+          maxBackoff: Duration(seconds: 2),
+          jitter: true));
 
   /// The policies of the methods, by the name of the method.
   static final Map<String, DependencyPolicy> policies =
       <String, DependencyPolicy>{
-        'GetUser': getUser,
-        'ListUsers': listUsers,
-        'CreateUser': createUser,
-      };
+    'GetUser': getUser,
+    'ListUsers': listUsers,
+    'CreateUser': createUser,
+  };
 }
 
 /// Typed client for the `UsersService` service.
@@ -874,22 +903,21 @@ class UsersServiceClient {
     String dependencyName = 'UsersService',
     DependencyPolicy policy = const DependencyPolicy(),
     Map<String, DependencyPolicy>? policies,
-  }) : _transport =
-           transport ??
-           HttpServiceTransport(baseUrl: baseUrl, client: httpClient),
-       // ignore: prefer_initializing_formals
-       _timeout = timeout,
-       // ignore: prefer_initializing_formals
-       _tracer = tracer,
-       // ignore: prefer_initializing_formals
-       _dependencyName = dependencyName,
-       // ignore: prefer_initializing_formals
-       _policy = policy,
-       // ignore: prefer_initializing_formals
-       _policies = <String, DependencyPolicy>{
-         ...UsersServicePolicies.policies,
-         ...?policies,
-       };
+  })  : _transport = transport ??
+            HttpServiceTransport(baseUrl: baseUrl, client: httpClient),
+        // ignore: prefer_initializing_formals
+        _timeout = timeout,
+        // ignore: prefer_initializing_formals
+        _tracer = tracer,
+        // ignore: prefer_initializing_formals
+        _dependencyName = dependencyName,
+        // ignore: prefer_initializing_formals
+        _policy = policy,
+        // ignore: prefer_initializing_formals
+        _policies = <String, DependencyPolicy>{
+          ...UsersServicePolicies.policies,
+          ...?policies,
+        };
 
   /// Base URL of the service, e.g. `http://localhost:8080`.
   final String baseUrl;
@@ -933,7 +961,9 @@ class UsersServiceClient {
       '/users.v1.UsersService/GetUser',
     );
 
-    final headers = <String, String>{'accept': 'application/json'};
+    final headers = <String, String>{
+      'accept': 'application/json',
+    };
 
     if (idempotencyKey != null) {
       headers['idempotency-key'] = idempotencyKey;
@@ -956,19 +986,24 @@ class UsersServiceClient {
   }
 
   /// ListUsers returns a page of users.
-  Future<ListUsersResponse> listUsers(
-    ListUsersRequest request, {
-    String? idempotencyKey,
-  }) async {
+  Future<ListUsersResponse> listUsers(ListUsersRequest request,
+      {String? idempotencyKey}) async {
     final query = <String, String>{};
     query['limit'] = request.limit.toString();
     query['cursor'] = request.cursor.toString();
 
     final uri = _transport
-        .buildUri('/v1/users', '/users.v1.UsersService/ListUsers')
-        .replace(queryParameters: query.isEmpty ? null : query);
+        .buildUri(
+          '/v1/users',
+          '/users.v1.UsersService/ListUsers',
+        )
+        .replace(
+          queryParameters: query.isEmpty ? null : query,
+        );
 
-    final headers = <String, String>{'accept': 'application/json'};
+    final headers = <String, String>{
+      'accept': 'application/json',
+    };
 
     if (idempotencyKey != null) {
       headers['idempotency-key'] = idempotencyKey;
@@ -988,16 +1023,13 @@ class UsersServiceClient {
     return _transport.bodyFormat == BodyFormat.protobuf
         ? ListUsersResponse.fromProtoBytes(response.body)
         : ListUsersResponse.fromJson(
-            jsonDecode(response.text) as Map<String, dynamic>,
-          );
+            jsonDecode(response.text) as Map<String, dynamic>);
   }
 
   /// CreateUser creates a new user.
   /// The call changes something, so it is never retried.
-  Future<User> createUser(
-    CreateUserRequest request, {
-    String? idempotencyKey,
-  }) async {
+  Future<User> createUser(CreateUserRequest request,
+      {String? idempotencyKey}) async {
     final uri = _transport.buildUri(
       '/v1/users',
       '/users.v1.UsersService/CreateUser',
@@ -1044,7 +1076,9 @@ class UsersServiceClient {
     final methodPolicy = _policies[method];
     final effectivePolicy = methodPolicy == null
         ? DependencyPolicy(timeout: _timeout)
-        : methodPolicy.copyWith(timeout: methodPolicy.timeout ?? _timeout);
+        : methodPolicy.copyWith(
+            timeout: methodPolicy.timeout ?? _timeout,
+          );
     try {
       return await _dependency.call(
         TransportRequest(
@@ -1055,8 +1089,8 @@ class UsersServiceClient {
           contentType: body == null
               ? null
               : _transport.bodyFormat == BodyFormat.protobuf
-              ? "application/protobuf"
-              : "application/json",
+                  ? "application/protobuf"
+                  : "application/json",
         ),
         policy: effectivePolicy,
         operation: operation,

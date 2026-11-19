@@ -23,7 +23,8 @@ void main() {
   });
 
   group('The generated client', () {
-    test('retries an idempotent call and gives up with the status of the '
+    test(
+        'retries an idempotent call and gives up with the status of the '
         'dependency', () async {
       final transport = TestTransport();
       transport.alwaysRespond(TransportResponse(statusCode: 503));

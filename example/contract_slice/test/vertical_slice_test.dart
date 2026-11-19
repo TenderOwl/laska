@@ -106,9 +106,8 @@ void main() {
       final operation = get['get'] as Map<String, dynamic>;
       expect(operation['operationId'], 'UsersService.GetUser');
 
-      final schemas =
-          (document['components'] as Map<String, dynamic>)['schemas']
-              as Map<String, dynamic>;
+      final schemas = (document['components']
+          as Map<String, dynamic>)['schemas'] as Map<String, dynamic>;
       expect(schemas.keys, contains('User'));
       expect(schemas.keys, contains('UserRole'));
     });

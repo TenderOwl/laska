@@ -15,10 +15,10 @@ class Account {
 
   /// The account in the form of a JSON document.
   Map<String, Object?> toJson() => <String, Object?>{
-    'id': id,
-    'name': name,
-    'balance': balance,
-  };
+        'id': id,
+        'name': name,
+        'balance': balance,
+      };
 }
 
 /// A transfer of money from one account to another.
@@ -44,11 +44,11 @@ class Transfer {
 
   /// The transfer in the form of a JSON document.
   Map<String, Object?> toJson() => <String, Object?>{
-    'from': from,
-    'to': to,
-    'amount': amount,
-    'created_at': createdAt.toUtc().toIso8601String(),
-  };
+        'from': from,
+        'to': to,
+        'amount': amount,
+        'created_at': createdAt.toUtc().toIso8601String(),
+      };
 }
 
 /// The repository of the accounts.
@@ -190,8 +190,8 @@ class AccountRepository {
   }
 
   Account _toAccount(Map<String, Object?> row) => Account(
-    id: row['id']! as String,
-    name: row['name']! as String,
-    balance: row['balance']! as int,
-  );
+        id: row['id']! as String,
+        name: row['name']! as String,
+        balance: row['balance']! as int,
+      );
 }
