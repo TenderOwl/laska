@@ -44,6 +44,11 @@ $ dart run tool/check.dart
 `tool/check.dart` runs the format, the analyzer and the tests of every package
 of the workspace. The same script runs in CI on Linux, Windows and macOS.
 
+The gate runs the toolchain of Go as well, when it is installed: it checks the
+format of the SDK of the example, runs the vet and the tests of the SDK. The
+code the generator writes for Go is formatted the way `gofmt` formats it, so
+the SDK is formatted without a toolchain on the machine of the user.
+
 The rules the code follows:
 
 - `dart format .` changes nothing — the format is the format of the tool, not
