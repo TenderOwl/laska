@@ -14,6 +14,8 @@ workspace:
   - example/auth_service
   - example/contract_slice
   - example/database_service
+  - example/workspace/services/shop
+  - example/workspace/services/shop_gateway
 
 dependencies:
   laska_core: ^0.1.0

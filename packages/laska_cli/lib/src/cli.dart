@@ -9,6 +9,7 @@ import 'package:laska_cli/src/help.dart';
 import 'package:laska_cli/src/keys.dart';
 import 'package:laska_cli/src/parser.dart';
 import 'package:laska_cli/src/scaffold.dart';
+import 'package:laska_cli/src/sdk.dart';
 import 'package:laska_cli/src/upgrade.dart';
 import 'package:laska_cli/src/workspace.dart';
 import 'package:laska_core/laska_core.dart';
@@ -322,6 +323,10 @@ class _Cli {
     final compiler = ContractCompiler(
       title: options.option('title')!,
       version: options.option('version')!,
+      // The generated code is written for the version of the SDK the package
+      // declares, so `dart format` of that package agrees with the code the
+      // generator writes.
+      languageVersion: sdkVersionOf(outputDirectory),
     );
 
     final CompileResult result;

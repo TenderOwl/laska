@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:pub_semver/pub_semver.dart';
+
 import 'generator/dart_generator.dart';
 import 'generator/openapi_generator.dart';
 import 'model.dart';
@@ -59,13 +61,25 @@ class CompileResult {
 /// Compiles contracts into Dart code and an OpenAPI document.
 class ContractCompiler {
   /// Creates a compiler.
-  ContractCompiler({this.title = 'Laska API', this.version = '0.1.0'});
+  ///
+  /// The [languageVersion] is the version of the language the generated code
+  /// is written for. It decides the style of the formatter, and the style has
+  /// to be the one of the package the code goes into: `dart format` picks the
+  /// style by the version of the SDK the package declares.
+  ContractCompiler({
+    this.title = 'Laska API',
+    this.version = '0.1.0',
+    this.languageVersion,
+  });
 
   /// Title of the generated OpenAPI document.
   final String title;
 
   /// Version of the generated OpenAPI document.
   final String version;
+
+  /// The version of the language the generated code is written for.
+  final Version? languageVersion;
 
   /// Compiles [sources] into generated files.
   ///
@@ -82,7 +96,10 @@ class ContractCompiler {
       throw ContractCompileException(problems);
     }
 
-    final generated = DartGenerator(contract).generate();
+    final generated = DartGenerator(
+      contract,
+      languageVersion: languageVersion,
+    ).generate();
     final openapi = OpenApiGenerator(
       contract,
       title: title,

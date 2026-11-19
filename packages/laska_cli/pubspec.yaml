@@ -18,6 +18,7 @@ dependencies:
   args: ^2.7.0
   laska_contracts: ^0.1.0
   laska_core: ^0.1.0
+  pub_semver: ^2.2.0
 
 dev_dependencies:
   test: ^1.33.0

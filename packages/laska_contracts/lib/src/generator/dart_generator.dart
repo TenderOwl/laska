@@ -1,4 +1,5 @@
 import 'package:dart_style/dart_style.dart';
+import 'package:pub_semver/pub_semver.dart';
 
 import '../model.dart';
 import '../naming.dart';
@@ -23,10 +24,23 @@ class GeneratedFile {
 /// service and a typed client.
 class DartGenerator {
   /// Creates a generator for [contract].
-  DartGenerator(this.contract);
+  ///
+  /// The [languageVersion] is the version of the language the generated code
+  /// is written for. It decides the style of the formatter, and the style has
+  /// to be the one of the package the code goes into: `dart format` picks the
+  /// style by the version of the SDK the package declares, so the code of the
+  /// generator and the code of the package have to agree.
+  DartGenerator(this.contract, {this.languageVersion});
 
   /// The contract to generate code for.
   final Contract contract;
+
+  /// The version of the language the generated code is written for.
+  ///
+  /// The short style of the formatter is used when it is not given, because
+  /// that is the style of the oldest version of the SDK the framework
+  /// supports.
+  final Version? languageVersion;
 
   late final TypeResolver _types = TypeResolver(contract);
 
@@ -48,7 +62,8 @@ class DartGenerator {
   String _format(String source) {
     try {
       return DartFormatter(
-        languageVersion: DartFormatter.latestLanguageVersion,
+        languageVersion:
+            languageVersion ?? DartFormatter.latestShortStyleLanguageVersion,
       ).format(source);
     } on FormatterException catch (error) {
       throw StateError(
