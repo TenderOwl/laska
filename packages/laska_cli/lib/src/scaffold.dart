@@ -11,7 +11,14 @@ import 'dart:isolate';
 
 import 'package:laska_contracts/laska_contracts.dart';
 
+import 'version.dart';
 import 'workspace.dart';
+
+/// The version a scaffolded project starts with.
+///
+/// The version belongs to the project that is written, not to the framework it
+/// is written with, so it does not follow the version of the framework.
+const String projectVersion = '0.1.0';
 
 /// The directory of the Laska workspace the CLI belongs to.
 ///
@@ -491,7 +498,7 @@ Future<void> main(List<String> arguments) async {
 
   await Observability.install(
     app,
-    logger: Logger(service: '$name', version: '0.1.0'),
+    logger: Logger(service: '$name', version: '$projectVersion'),
   );
 
   register$service(app, ${service}Impl());
@@ -520,7 +527,7 @@ Future<void> main(List<String> arguments) async {
 
   final observability = await Observability.install(
     app,
-    logger: Logger(service: '$name', version: '0.1.0'),
+    logger: Logger(service: '$name', version: '$projectVersion'),
   );
 
   // The address of the service that keeps the records. `laska dev` gives it
@@ -691,6 +698,14 @@ void main() {
 }
 ''';
 
+/// The version of the framework the scaffolded service depends on.
+///
+/// The version is the version of the command line interface: the packages of
+/// the framework move in lockstep, so the service that is written depends on
+/// the version of the framework that is installed and not on a version that is
+/// written in the code and goes out of date.
+String frameworkVersion() => laskaVersion;
+
 /// The manifest of the scaffolded service.
 String _pubspec({
   required String name,
@@ -713,7 +728,7 @@ String _pubspec({
 
   final dependencies = <String, String>{
     'http': '^1.6.0',
-    'laska_core': '^0.1.0',
+    'laska_core': '^${frameworkVersion()}',
   };
 
   // The client of the service behind comes from the package of that service,
@@ -726,7 +741,7 @@ String _pubspec({
   final buffer = StringBuffer()
     ..writeln('name: $name')
     ..writeln('description: $description')
-    ..writeln('version: 0.1.0')
+    ..writeln('version: $projectVersion')
     ..writeln('publish_to: none')
     ..writeln()
     ..writeln('environment:')
@@ -739,8 +754,8 @@ String _pubspec({
   buffer
     ..writeln()
     ..writeln('dev_dependencies:')
-    ..writeln('  laska_contracts: ^0.1.0')
-    ..writeln('  laska_test: ^0.1.0')
+    ..writeln('  laska_contracts: ^${frameworkVersion()}')
+    ..writeln('  laska_test: ^${frameworkVersion()}')
     ..writeln('  test: ^1.33.0');
 
   if (overrides.isNotEmpty) {

@@ -298,8 +298,9 @@ services:
       final pubspec =
           File('${workspace.path}/users/pubspec.yaml').readAsStringSync();
 
-      expect(pubspec, contains('laska_core: ^0.1.0'));
-      expect(pubspec, contains('laska_test: ^0.1.0'));
+      expect(pubspec, contains('laska_core: ^${frameworkVersion()}'));
+      expect(pubspec, contains('laska_test: ^${frameworkVersion()}'));
+      expect(pubspec, contains('laska_contracts: ^${frameworkVersion()}'));
     });
   });
 

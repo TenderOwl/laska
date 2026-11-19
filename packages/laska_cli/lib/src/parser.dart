@@ -1,7 +1,9 @@
 import 'package:args/args.dart';
 
+import 'version.dart';
+
 /// The version of the CLI.
-const String cliVersion = '0.1.0';
+const String cliVersion = laskaVersion;
 
 /// Builds the parser of the CLI.
 ///

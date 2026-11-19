@@ -40,6 +40,10 @@ Future<void> main() async {
     failed = true;
   }
 
+  if (!checkCliVersion(root)) {
+    failed = true;
+  }
+
   if (!checkPublication(root)) {
     failed = true;
   }
@@ -108,6 +112,55 @@ bool checkVersions(Directory root) {
   }
 
   stdout.writeln('the packages of the workspace hold the version $version');
+  return true;
+}
+
+/// Checks that the version of the command line interface is written in the code
+/// the same way it is written in the pubspec.
+///
+/// The command prints the version and writes it into the projects it
+/// scaffolds, and the version of the command is the version of the framework:
+/// the packages move in lockstep. The constant that holds it cannot be read
+/// from the pubspec at runtime in every way the command is run — the bundle of
+/// the release carries the code and not the pubspec — so the gate holds the
+/// two together.
+///
+/// Returns whether the versions agree.
+bool checkCliVersion(Directory root) {
+  stdout.writeln('==> the version of the command');
+
+  final directory = Directory('${root.path}/packages/laska_cli');
+  final version = packageVersion(directory);
+
+  final file = File('${directory.path}/lib/src/version.dart');
+  if (!file.existsSync()) {
+    stderr.writeln('FAILED: the version of the command');
+    stderr.writeln('  the package "laska_cli" has no "lib/src/version.dart".');
+    return false;
+  }
+
+  final match = RegExp(
+    r"laskaVersion\s*=\s*'([^']+)'",
+  ).firstMatch(file.readAsStringSync());
+  if (match == null) {
+    stderr.writeln('FAILED: the version of the command');
+    stderr.writeln('  "lib/src/version.dart" holds no version.');
+    return false;
+  }
+
+  final constant = match.group(1)!;
+  if (constant != version) {
+    stderr.writeln('FAILED: the version of the command');
+    stderr.writeln('  the pubspec of "laska_cli": $version');
+    stderr.writeln('  the constant of "lib/src/version.dart": $constant');
+    stderr.writeln(
+      'The version of the command and the version of its pubspec have to be '
+      'the same one.',
+    );
+    return false;
+  }
+
+  stdout.writeln('the command holds the version $version');
   return true;
 }
 
