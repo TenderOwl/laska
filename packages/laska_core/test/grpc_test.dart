@@ -25,6 +25,20 @@ Future<grpc.GrpcError> _fail(
   GrpcServer server,
   String method,
   List<int> body,
+) =>
+    _failPath(server, '/users.v1.UsersService/$method', body);
+
+/// Calls a method of a service the server does not know and answers with the
+/// error of the call.
+Future<grpc.GrpcError> _failService(GrpcServer server, String service) =>
+    _failPath(server, '/$service/GetUser', const <int>[]);
+
+/// Calls the method at [path] and answers with the error of the call, if the
+/// call fails.
+Future<grpc.GrpcError> _failPath(
+  GrpcServer server,
+  String path,
+  List<int> body,
 ) async {
   final channel = grpc.ClientChannel(
     '127.0.0.1',
@@ -37,7 +51,7 @@ Future<grpc.GrpcError> _fail(
 
   final call = channel.createCall<List<int>, List<int>>(
     grpc.ClientMethod<List<int>, List<int>>(
-      '/users.v1.UsersService/$method',
+      path,
       (List<int> value) => value,
       (List<int> value) => value,
     ),
@@ -48,6 +62,10 @@ Future<grpc.GrpcError> _fail(
   try {
     await call.response.single;
   } on grpc.GrpcError catch (error) {
+    // The client closes the stream of the call in the background, and
+    // package:http2 asserts that a connection does not end with an open
+    // stream. The channel is closed after the cleanup.
+    await Future<void>.delayed(grpcSettleDelay);
     return error;
   }
   fail('The call was expected to fail.');
@@ -198,6 +216,21 @@ void main() {
       expect(error.code, GrpcStatus.internal);
     });
 
+    test('keeps the status of a failure of a dependency', () async {
+      _register(
+        app,
+        handler: (bytes) async => throw DependencyTimeoutException(
+          'users',
+          const Duration(seconds: 2),
+        ),
+      );
+      await server.start();
+
+      final error = await _fail(server, 'GetUser', const <int>[]);
+
+      expect(error.code, GrpcStatus.deadlineExceeded);
+    });
+
     test('answers with an unimplemented error for an unknown method', () async {
       _register(app);
       await server.start();
@@ -205,6 +238,30 @@ void main() {
       final error = await _fail(server, 'DeleteUser', const <int>[]);
 
       expect(error.code, GrpcStatus.unimplemented);
+    });
+
+    test('closes the connection after a call of an unknown method', () async {
+      _register(app);
+      await server.start();
+
+      final error = await _fail(server, 'DeleteUser', const <int>[]);
+      expect(error.code, GrpcStatus.unimplemented);
+
+      // The server closes the connection while the client is still there. The
+      // stream of the call is closed the way every other stream is, so the
+      // connection does not end with an open stream.
+      await server.stop().timeout(const Duration(seconds: 5));
+    });
+
+    test('answers with an unimplemented error for an unknown service',
+        () async {
+      _register(app);
+      await server.start();
+
+      final error = await _failService(server, 'orders.v1.OrdersService');
+      expect(error.code, GrpcStatus.unimplemented);
+
+      await server.stop().timeout(const Duration(seconds: 5));
     });
 
     test('serves the service registered on a group', () async {

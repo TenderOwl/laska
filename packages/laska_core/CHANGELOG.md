@@ -14,6 +14,15 @@
 - `run(app, grpcPort: 50051)` starts the gRPC server of the application next
   to the HTTP one.
 - The registry of the gRPC services of an application is `app.grpc`.
+- The gRPC transport and the gRPC server wait for the streams of the calls
+  that finished to be closed before they close the connection. The client of
+  `package:grpc` closes them in the background, and `package:http2` asserts
+  that a connection does not end with an open stream, so a shutdown that is
+  too early took the assertion with it.
+- The gRPC server answers the calls of the methods a service does not have
+  itself. The protocol of gRPC answers such a call and keeps the stream of it
+  open until the client goes away, so the connection of the service could not
+  be closed cleanly.
 
 ## 0.2.0
 

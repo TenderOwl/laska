@@ -18,6 +18,7 @@ import 'request.dart';
 import 'resilience/status.dart';
 import 'response.dart';
 import 'router.dart';
+import 'transport.dart';
 
 /// The handler of a method of a gRPC service.
 ///
@@ -116,6 +117,7 @@ class GrpcServer {
   final grpc.ServerCredentials? credentials;
 
   grpc.Server? _server;
+  int _calls = 0;
 
   /// The port the server listens on.
   ///
@@ -137,9 +139,9 @@ class GrpcServer {
     if (_server != null) {
       return;
     }
-    final server = grpc.Server.create(
+    final server = _LaskaGrpcServer(
       services: <grpc.Service>[
-        for (final service in services) _ServiceAdapter(service),
+        for (final service in services) _ServiceAdapter(service, this),
       ],
     );
     await server.serve(address: address, port: port, security: credentials);
@@ -147,13 +149,26 @@ class GrpcServer {
   }
 
   /// Stops the server.
+  ///
+  /// The server waits for the streams of the calls that finished to be closed
+  /// before it closes the connections: the clients close them in the
+  /// background, and `package:http2` asserts that a connection does not end
+  /// with an open stream.
   Future<void> stop() async {
     final server = _server;
     if (server == null) {
       return;
     }
     _server = null;
+    if (_calls > 0) {
+      await Future<void>.delayed(grpcSettleDelay);
+    }
     await server.shutdown();
+  }
+
+  /// Records that the server answered a call.
+  void _recordCall() {
+    _calls++;
   }
 
   /// The services of [app] and of the groups of [app].
@@ -166,29 +181,110 @@ class GrpcServer {
   }
 }
 
+/// The server of the services of the contracts.
+///
+/// The server answers the calls of the services it does not know itself: the
+/// protocol of gRPC answers such a call and keeps the stream of it open until
+/// the client goes away, so the connection of the service could not be closed
+/// cleanly.
+class _LaskaGrpcServer extends grpc.Server {
+  // The named constructor of the server is used, so the parameter cannot be
+  // forwarded to the constructor of the parent.
+  // ignore: use_super_parameters
+  _LaskaGrpcServer({required List<grpc.Service> services})
+      : super.create(services: services);
+
+  final Map<String, grpc.Service> _unknown = <String, grpc.Service>{};
+
+  @override
+  grpc.Service? lookupService(String service) =>
+      super.lookupService(service) ??
+      _unknown.putIfAbsent(service, () => _UnknownService(service));
+}
+
+/// The service that answers the calls of a service the server does not know.
+class _UnknownService extends grpc.Service {
+  _UnknownService(this.name);
+
+  /// The name of the service the caller asked for.
+  final String name;
+
+  @override
+  String get $name => name;
+
+  @override
+  grpc.ServiceMethod? $lookupMethod(String method) => _method;
+
+  late final grpc.ServiceMethod<List<int>, List<int>> _method =
+      grpc.ServiceMethod<List<int>, List<int>>(
+    'Unknown',
+    (grpc.ServiceCall call, Future<List<int>> request) async {
+      throw grpc.GrpcError.unimplemented(
+        'The service "$name" is not implemented',
+      );
+    },
+    false,
+    false,
+    (List<int> value) => value,
+    (List<int> value) => value,
+  );
+}
+
 /// The adapter of a service of a contract to the gRPC protocol.
 class _ServiceAdapter extends grpc.Service {
-  _ServiceAdapter(this.service) {
+  _ServiceAdapter(this.service, this.server) {
     for (final entry in service.methods.entries) {
-      $addMethod(
-        grpc.ServiceMethod<List<int>, List<int>>(
-          entry.key,
-          (grpc.ServiceCall call, Future<List<int>> request) =>
-              _handle(call, entry.key, request),
-          false,
-          false,
-          (List<int> value) => value,
-          (List<int> value) => value,
-        ),
+      final method = grpc.ServiceMethod<List<int>, List<int>>(
+        entry.key,
+        (grpc.ServiceCall call, Future<List<int>> request) =>
+            _handle(call, entry.key, request),
+        false,
+        false,
+        (List<int> value) => value,
+        (List<int> value) => value,
       );
+      _methods[entry.key] = method;
+      $addMethod(method);
     }
   }
 
   /// The service of the contract.
   final GrpcService service;
 
+  /// The server the service belongs to.
+  final GrpcServer server;
+
+  final Map<String, grpc.ServiceMethod<List<int>, List<int>>> _methods =
+      <String, grpc.ServiceMethod<List<int>, List<int>>>{};
+
+  /// The method that answers the calls of the methods the service does not
+  /// have.
+  ///
+  /// The protocol of gRPC answers such a call itself, and the stream of the
+  /// call stays open until the client goes away: the server keeps it in its
+  /// connection, and the connection cannot be closed cleanly. The server
+  /// answers the call itself, so the stream is closed the way every other
+  /// stream is.
+  late final grpc.ServiceMethod<List<int>, List<int>> _unknown =
+      grpc.ServiceMethod<List<int>, List<int>>(
+    'Unknown',
+    (grpc.ServiceCall call, Future<List<int>> request) async {
+      throw grpc.GrpcError.unimplemented(
+        'The method "${_methodOf(call)}" of the service "${service.name}" is '
+        'not implemented',
+      );
+    },
+    false,
+    false,
+    (List<int> value) => value,
+    (List<int> value) => value,
+  );
+
   @override
   String get $name => service.name;
+
+  @override
+  grpc.ServiceMethod? $lookupMethod(String name) => _methods[name] ?? _unknown;
 
   /// Answers a call of the method [method].
   ///
@@ -209,6 +305,7 @@ class _ServiceAdapter extends grpc.Service {
 
     try {
       final bytes = await request;
+      server._recordCall();
       final response = await _run(call, method, (ctx) async {
         final body = await handler(bytes);
         return Response.bytes(body, contentType: 'application/protobuf');
@@ -231,7 +328,9 @@ class _ServiceAdapter extends grpc.Service {
         error.message,
       );
     } catch (error) {
-      throw grpc.GrpcError.internal(error.toString());
+      // The errors of the framework keep their status, so a service degrades
+      // the same way whatever transport the caller used.
+      throw grpc.GrpcError.custom(grpcStatusOfError(error), error.toString());
     }
   }
 
@@ -252,6 +351,13 @@ class _ServiceAdapter extends grpc.Service {
       _requestOf(call, method),
       handler,
     );
+  }
+
+  /// The name of the method the call asks for.
+  String _methodOf(grpc.ServiceCall call) {
+    final path = call.clientMetadata?[':path'] ?? '';
+    final parts = path.split('/');
+    return parts.last;
   }
 
   /// The request the middleware of the call sees.

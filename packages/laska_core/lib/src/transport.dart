@@ -171,6 +171,16 @@ class HttpServiceTransport implements ServiceTransport {
   }
 }
 
+/// How long a gRPC connection waits for the streams of the calls that
+/// finished to be closed.
+///
+/// The client of `package:grpc` closes the stream of a call in the
+/// background, and `package:http2` asserts that a connection does not end
+/// with an open stream: a connection that is closed too early takes the
+/// assertion with it. The wait is the price of a shutdown that does not
+/// crash the service.
+const Duration grpcSettleDelay = Duration(milliseconds: 100);
+
 /// A transport that talks to another service over gRPC.
 ///
 /// The body of the request and the body of the answer are the bytes of the
@@ -204,6 +214,9 @@ class GrpcServiceTransport implements ServiceTransport {
 
   final grpc.ClientChannel _channel;
 
+  int _inFlight = 0;
+  bool _called = false;
+
   @override
   BodyFormat get bodyFormat => BodyFormat.protobuf;
 
@@ -213,6 +226,16 @@ class GrpcServiceTransport implements ServiceTransport {
 
   @override
   Future<TransportResponse> send(TransportRequest request) async {
+    _inFlight++;
+    _called = true;
+    try {
+      return await _send(request);
+    } finally {
+      _inFlight--;
+    }
+  }
+
+  Future<TransportResponse> _send(TransportRequest request) async {
     final method = grpc.ClientMethod<List<int>, List<int>>(
       request.uri.path,
       (List<int> value) => value,
@@ -242,8 +265,24 @@ class GrpcServiceTransport implements ServiceTransport {
     }
   }
 
+  /// Closes the transport.
+  ///
+  /// The calls that are running are waited for — at most five seconds — and
+  /// the channel is closed after the streams of the calls that finished are
+  /// closed: the client of `package:grpc` closes them in the background, and
+  /// `package:http2` asserts that a connection does not end with an open
+  /// stream.
   @override
-  Future<void> close() => _channel.shutdown();
+  Future<void> close() async {
+    final deadline = DateTime.now().add(const Duration(seconds: 5));
+    while (_inFlight > 0 && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    if (_called) {
+      await Future<void>.delayed(grpcSettleDelay);
+    }
+    await _channel.shutdown();
+  }
 }
 
 /// Reads the `retry-after` header of an answer.

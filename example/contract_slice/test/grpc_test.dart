@@ -10,6 +10,7 @@ void main() {
     late Laska app;
     late GrpcServer grpcServer;
     late HttpServer httpServer;
+    late GrpcServiceTransport transport;
     late UsersServiceClient grpcClient;
     late UsersServiceClient httpClient;
 
@@ -20,12 +21,13 @@ void main() {
       grpcServer = await serveGrpc(app, address: '127.0.0.1', port: 0);
       httpServer = await serve(app, address: '127.0.0.1', port: 0);
 
+      transport = GrpcServiceTransport(
+        host: '127.0.0.1',
+        port: grpcServer.port,
+      );
       grpcClient = UsersServiceClient(
         baseUrl: 'http://127.0.0.1:${grpcServer.port}',
-        transport: GrpcServiceTransport(
-          host: '127.0.0.1',
-          port: grpcServer.port,
-        ),
+        transport: transport,
       );
       httpClient = UsersServiceClient(
         baseUrl: 'http://127.0.0.1:${httpServer.port}',
@@ -33,6 +35,7 @@ void main() {
     });
 
     tearDown(() async {
+      await transport.close();
       await grpcServer.stop();
       await httpServer.close(force: true);
     });
