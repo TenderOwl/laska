@@ -1,5 +1,7 @@
 ## Unreleased
 
+## 0.2.0
+
 - **The parser reads the whole of proto3 a service needs.** A contract may hold
   `map` fields, groups of a `oneof` and messages and enums that are declared
   inside a message — the constructs that are in almost every real contract and
@@ -34,7 +36,10 @@
   root, so a package that joins the workspace is tested without a change of
   the gate. The gate also checks that the published packages hold one version
   and that they are ready to be published: the metadata pub.dev asks for and no
-  path dependency, which pub.dev does not accept.
+  path dependency, which pub.dev does not accept. The version of the command
+  line interface is checked against its pubspec too, so the version the command
+  prints and the version it writes into a project cannot drift away from the
+  release they belong to.
 
 - **The generated code is written in the style of the package it goes into.**
   The generator wrote the code in the newest style of the formatter, while
@@ -51,9 +56,26 @@
   dev` starts the services in the order of their dependencies, and the second
   service calls the first one through the client of its contract, so the call
   carries the policy of the contract and the trace of the request.
+
 - **The scaffold writes imports that the linter accepts.** The generated code
   imported the library of the service with a relative path, which the lints of
   the framework forbid. The imports are `package:` imports now.
+
+- **The scaffold depends on the version of the framework that is installed.**
+  The version of the framework was written in the code of the scaffolder, so
+  every project it wrote depended on a version that went out of date with the
+  next release. The command writes the version it holds now, and the gate of
+  the repository holds that version to the version of its pubspec.
+
+- **The packages of the framework move to the version `0.2.0`.** The release is
+  a tag, as it was for `0.1.0`: the workflow of the release checks that the tag
+  is the version of the packages, builds the bundle of the command for Linux,
+  macOS and Windows on x64 and on arm64, publishes the packages on pub.dev
+  without a secret in the repository — the token of pub.dev is a temporary one
+  that GitHub signs for the audience of pub.dev — and opens the release of the
+  repository with the archives and their checksums.
+
+## 0.1.0
 
 - **The examples of the repository:**
   - `example/auth_service` shows how a caller proves who it is: a token, a scope
@@ -212,8 +234,8 @@
   the list of the commands, the global options and the environment variables of the telemetry, and
   `laska help <command>` describes one command with its options and its defaults. Every command also
   answers `--help` on its own. The help is built from the parser, so it cannot drift away from the
-  commands and the options that are actually there. An unknown command is reported and exits with
-  the code `64` instead of printing the help as if nothing happened.
+  commands and the options that are actually there. An unknown command is reported and exits with the
+  code `64` instead of printing the help as if nothing happened.
 - The commands of the CLI moved to `laska_cli/src/cli.dart` behind `runCli(arguments, {out, err})`,
   and the executable only forwards the result to the process. A test can therefore drive the
   commands in process, which made the suite of the CLI about fifteen times faster and removed the

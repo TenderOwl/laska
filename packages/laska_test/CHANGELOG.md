@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0
+
+- The harness is published again with the version of the framework, so a
+  project can depend on the version of the framework it uses.
+
 ## 0.1.0
 
 - The first release of the test harness: the in-process client, the expectation

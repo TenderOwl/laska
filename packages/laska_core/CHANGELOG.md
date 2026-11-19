@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - A boolean is written with its value now. The writer of the wire format wrote
   the value `1` whatever the boolean was, so every `false` of a contract came

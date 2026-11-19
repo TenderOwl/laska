@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - The compiler takes the version of the language the generated code is written
   for. The style of the formatter depends on it, and it has to be the style of
