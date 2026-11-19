@@ -31,6 +31,18 @@ void main() {
 
       expect(writer.toBytes(), isNotEmpty);
     });
+
+    test('writes the value of a boolean, not only its tag', () {
+      final writer = ProtoWriter()..writeBool(1, false);
+      final bytes = writer.toBytes();
+
+      // The tag of the field, and then the value: 0 is false.
+      expect(bytes, <int>[0x08, 0x00]);
+
+      final reader = ProtoReader(bytes);
+      reader.readTag();
+      expect(reader.readBool(), isFalse);
+    });
   });
 
   group('ProtoReader', () {

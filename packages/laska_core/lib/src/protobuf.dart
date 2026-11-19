@@ -76,7 +76,7 @@ class ProtoWriter {
   /// Writes a boolean.
   void writeBool(int field, bool value) {
     _writeTag(field, WireType.varint);
-    _writeVarint(1);
+    _writeVarint(value ? 1 : 0);
   }
 
   /// Writes the number of an enum value.
