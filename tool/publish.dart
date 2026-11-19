@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'packages.dart';
@@ -15,6 +16,11 @@ import 'packages.dart';
 ///
 /// The packages are published in the order of their dependencies: `laska_core`
 /// first, then `laska_contracts`, `laska_test` and `laska_cli`.
+///
+/// The publication is re-runnable: a package whose version is on pub.dev
+/// already is left alone. A pipeline that stopped half way through — a package
+/// that waits for the version of another one to reach the index of pub.dev —
+/// can therefore be run again, and it publishes only what is missing.
 ///
 /// The token of the publisher is read from the environment `PUB_TOKEN`, so a
 /// pipeline may publish without a person in the loop. Without the token the
@@ -51,6 +57,12 @@ Future<void> main(List<String> arguments) async {
       exit(66);
     }
 
+    final version = packageVersion(directory);
+    if (await _isPublished(package, version)) {
+      stdout.writeln('==> $package $version is published already.');
+      continue;
+    }
+
     stdout.writeln('==> $package');
     final staged =
         _stage(directory, localDependencies: options.localDependencies);
@@ -74,6 +86,37 @@ Future<void> main(List<String> arguments) async {
         ? 'The dry run is over: every package is ready to be published.'
         : 'The packages are published.',
   );
+}
+
+/// Whether the [version] of the [package] is on pub.dev already.
+///
+/// The answer is read from the API of pub.dev. A package that cannot be
+/// reached is taken for a package that is not published: the client of pub.dev
+/// refuses a version that exists anyway, and the error it prints says so.
+Future<bool> _isPublished(String package, String version) async {
+  final client = HttpClient();
+  try {
+    final request = await client.getUrl(
+      Uri.parse('https://pub.dev/api/packages/$package'),
+    );
+    final response = await request.close();
+    if (response.statusCode != 200) {
+      return false;
+    }
+
+    final body = await response.transform(utf8.decoder).join();
+    final document = jsonDecode(body) as Map<String, dynamic>;
+    final versions = (document['versions'] as List<dynamic>? ?? <dynamic>[])
+        .whereType<Map<String, dynamic>>()
+        .map((entry) => entry['version'])
+        .whereType<String>();
+
+    return versions.contains(version);
+  } catch (_) {
+    return false;
+  } finally {
+    client.close();
+  }
 }
 
 /// The options of the command.

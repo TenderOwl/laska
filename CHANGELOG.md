@@ -67,6 +67,11 @@
   next release. The command writes the version it holds now, and the gate of
   the repository holds that version to the version of its pubspec.
 
+- **The publication of the packages is re-runnable.** A package whose version is
+  on pub.dev already is left alone, so a pipeline that stopped half way through
+  — a package that waits for the version of another one to reach the index of
+  pub.dev — can be run again, and it publishes only what is missing.
+
 - **The packages of the framework move to the version `0.2.0`.** The release is
   a tag, as it was for `0.1.0`: the workflow of the release checks that the tag
   is the version of the packages, builds the bundle of the command for Linux,
