@@ -83,3 +83,37 @@ message CreateUserRequest {
   string display_name = 2;
   UserRole role = 3;
 }
+
+// A subscription of a user to a plan.
+//
+// The message holds the constructs a contract needs the most: a message
+// declared inside a message, an enum declared inside a message, a map and a
+// group of a oneof.
+message Subscription {
+  // The plan of the subscription.
+  message Plan {
+    string name = 1;
+    int32 seats = 2;
+  }
+
+  // The state of the subscription.
+  enum State {
+    SUBSCRIPTION_STATE_ACTIVE = 0;
+    SUBSCRIPTION_STATE_PAUSED = 1;
+  }
+
+  // The plan of the subscription.
+  Plan plan = 1;
+
+  // The state of the subscription.
+  State state = 2;
+
+  // The features of the plan, by their name.
+  map<string, bool> features = 3;
+
+  // How the subscription is paid.
+  oneof payment {
+    string card_token = 4;
+    string iban = 5;
+  }
+}

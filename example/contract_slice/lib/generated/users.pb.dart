@@ -50,6 +50,45 @@ enum UserRole {
   }
 }
 
+/// The state of the subscription.
+enum SubscriptionState {
+  subscriptionStateActive('SUBSCRIPTION_STATE_ACTIVE', number: 0),
+  subscriptionStatePaused('SUBSCRIPTION_STATE_PAUSED', number: 1);
+
+  const SubscriptionState(this.protoName, {this.number = 0});
+
+  /// The name of the value in the contract.
+  final String protoName;
+
+  /// The number of the value on the wire.
+  final int number;
+
+  /// Parses [raw] into a SubscriptionState value.
+  static SubscriptionState fromName(Object? raw, {String? field}) {
+    if (raw is String) {
+      for (final value in SubscriptionState.values) {
+        if (value.protoName == raw || value.name == raw) {
+          return value;
+        }
+      }
+    }
+    if (field != null) {
+      throw FormatException('Unknown SubscriptionState value for $field: $raw');
+    }
+    throw FormatException('Unknown SubscriptionState value: $raw');
+  }
+
+  /// Reads the value of the number [number].
+  static SubscriptionState fromNumber(int number) {
+    for (final value in SubscriptionState.values) {
+      if (value.number == number) {
+        return value;
+      }
+    }
+    return SubscriptionState.subscriptionStateActive;
+  }
+}
+
 // Messages
 
 /// A user of the application.
@@ -442,6 +481,280 @@ class CreateUserRequest {
       displayName: displayName,
       role: role,
     );
+  }
+}
+
+/// A subscription of a user to a plan.
+/// The message holds the constructs a contract needs the most: a message
+/// declared inside a message, an enum declared inside a message, a map and a
+/// group of a oneof.
+class Subscription {
+  /// Creates a Subscription.
+  const Subscription({
+    required this.plan,
+    required this.state,
+    this.features = const <String, bool>{},
+    this.payment,
+  });
+
+  /// The plan of the subscription.
+  final SubscriptionPlan plan;
+
+  /// The state of the subscription.
+  final SubscriptionState state;
+
+  /// The features of the plan, by their name.
+  final Map<String, bool> features;
+
+  /// The group of the oneof `payment`.
+  ///
+  /// Only one member of the group carries a value.
+  final SubscriptionPayment? payment;
+
+  /// Builds a Subscription from its JSON representation.
+  factory Subscription.fromJson(Map<String, dynamic> json) {
+    final plan = json['plan'];
+    if (plan is! Map<String, dynamic>) {
+      throw const FormatException('Subscription.plan must be an object');
+    }
+    final planValue = SubscriptionPlan.fromJson(plan);
+    final stateValue = SubscriptionState.fromName(
+      json['state'],
+      field: 'Subscription.state',
+    );
+    final features = json['features'];
+    if (features != null && features is! Map) {
+      throw const FormatException('Subscription.features must be an object');
+    }
+    final featuresValue = <String, bool>{};
+    if (features != null) {
+      features.forEach((mapKey, mapValue) {
+        featuresValue[mapKey as String] = mapValue as bool;
+      });
+    }
+    return Subscription(
+      plan: planValue,
+      state: stateValue,
+      features: featuresValue,
+      payment: SubscriptionPayment.fromJson(json),
+    );
+  }
+
+  /// The JSON representation of the Subscription.
+  Map<String, dynamic> toJson() {
+    final paymentValue = payment;
+    return <String, dynamic>{
+      'plan': plan.toJson(),
+      'state': state.protoName,
+      'features': features,
+      if (paymentValue != null) ...paymentValue.toJson(),
+    };
+  }
+
+  /// The bytes of the message in the wire format of the protocol buffers.
+  List<int> toProtoBytes() {
+    final writer = ProtoWriter();
+    final paymentValue = payment;
+    writer.writeMessage(1, plan.toProtoBytes());
+    if (state.number != 0) {
+      writer.writeEnum(2, state.number);
+    }
+    for (final entry in features.entries) {
+      final entryWriter = ProtoWriter();
+      entryWriter.writeString(1, entry.key);
+      entryWriter.writeBool(2, entry.value);
+      writer.writeMessage(3, entryWriter.toBytes());
+    }
+    if (paymentValue is SubscriptionPaymentCardToken) {
+      writer.writeString(4, paymentValue.value);
+    }
+    if (paymentValue is SubscriptionPaymentIban) {
+      writer.writeString(5, paymentValue.value);
+    }
+    return writer.toBytes();
+  }
+
+  /// Reads a message out of the wire format of the protocol buffers.
+  factory Subscription.fromProtoBytes(List<int> bytes) {
+    final reader = ProtoReader(bytes);
+    SubscriptionPlan? plan;
+    var state = SubscriptionState.subscriptionStateActive;
+    var features = <String, bool>{};
+    SubscriptionPayment? payment;
+
+    while (reader.hasNext) {
+      final tag = reader.readTag();
+      switch (tag) {
+        case 1:
+          plan = SubscriptionPlan.fromProtoBytes(reader.readBytes());
+        case 2:
+          state = SubscriptionState.fromNumber(reader.readEnum());
+        case 3:
+          final entryReader = ProtoReader(reader.readBytes());
+          var mapEntryKeyFeatures = '';
+          var mapEntryValueFeatures = false;
+          while (entryReader.hasNext) {
+            final entryTag = entryReader.readTag();
+            switch (entryTag) {
+              case 1:
+                mapEntryKeyFeatures = entryReader.readString();
+              case 2:
+                mapEntryValueFeatures = entryReader.readBool();
+              default:
+                entryReader.skipField();
+            }
+          }
+          features[mapEntryKeyFeatures] = mapEntryValueFeatures;
+        case 4:
+          payment = SubscriptionPaymentCardToken(reader.readString());
+        case 5:
+          payment = SubscriptionPaymentIban(reader.readString());
+        default:
+          reader.skipField();
+      }
+    }
+
+    if (plan == null) {
+      throw FormatException(
+        'The message "Subscription" needs the field "plan".',
+      );
+    }
+    return Subscription(
+      plan: plan,
+      state: state,
+      features: features,
+      payment: payment,
+    );
+  }
+}
+
+/// The group of the oneof `payment` of the `Subscription` message.
+///
+/// The members of the group are exclusive: only one of them
+/// carries a value.
+sealed class SubscriptionPayment {
+  const SubscriptionPayment();
+
+  /// The name of the member of the group that is set.
+  String get memberName;
+
+  /// The JSON representation of the member that is set.
+  Map<String, dynamic> toJson();
+
+  /// Reads the group out of the JSON of a message.
+  ///
+  /// Returns `null` when no member of the group is set.
+  static SubscriptionPayment? fromJson(Map<String, dynamic> json) {
+    if (json.containsKey('cardToken')) {
+      final value = json['cardToken'];
+      if (value is! String) {
+        throw const FormatException(
+          'Subscription.payment.cardToken must be of type String',
+        );
+      }
+      return SubscriptionPaymentCardToken(value);
+    }
+    if (json.containsKey('iban')) {
+      final value = json['iban'];
+      if (value is! String) {
+        throw const FormatException(
+          'Subscription.payment.iban must be of type String',
+        );
+      }
+      return SubscriptionPaymentIban(value);
+    }
+    return null;
+  }
+}
+
+/// The member `cardToken` of the group `payment` of the `Subscription` message.
+class SubscriptionPaymentCardToken extends SubscriptionPayment {
+  const SubscriptionPaymentCardToken(this.value);
+
+  /// The value of the member.
+  final String value;
+
+  @override
+  String get memberName => 'cardToken';
+
+  @override
+  Map<String, dynamic> toJson() => <String, dynamic>{'cardToken': value};
+}
+
+/// The member `iban` of the group `payment` of the `Subscription` message.
+class SubscriptionPaymentIban extends SubscriptionPayment {
+  const SubscriptionPaymentIban(this.value);
+
+  /// The value of the member.
+  final String value;
+
+  @override
+  String get memberName => 'iban';
+
+  @override
+  Map<String, dynamic> toJson() => <String, dynamic>{'iban': value};
+}
+
+/// The plan of the subscription.
+class SubscriptionPlan {
+  /// Creates a SubscriptionPlan.
+  const SubscriptionPlan({required this.name, required this.seats});
+
+  final String name;
+  final int seats;
+
+  /// Builds a SubscriptionPlan from its JSON representation.
+  factory SubscriptionPlan.fromJson(Map<String, dynamic> json) {
+    final name = json['name'];
+    if (name is! String) {
+      throw const FormatException(
+        'SubscriptionPlan.name must be of type String',
+      );
+    }
+    final seats = json['seats'];
+    if (seats is! int) {
+      throw const FormatException('SubscriptionPlan.seats must be of type int');
+    }
+    return SubscriptionPlan(name: name, seats: seats);
+  }
+
+  /// The JSON representation of the SubscriptionPlan.
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'name': name,
+    'seats': seats,
+  };
+
+  /// The bytes of the message in the wire format of the protocol buffers.
+  List<int> toProtoBytes() {
+    final writer = ProtoWriter();
+    if (name != '') {
+      writer.writeString(1, name);
+    }
+    if (seats != 0) {
+      writer.writeInt32(2, seats);
+    }
+    return writer.toBytes();
+  }
+
+  /// Reads a message out of the wire format of the protocol buffers.
+  factory SubscriptionPlan.fromProtoBytes(List<int> bytes) {
+    final reader = ProtoReader(bytes);
+    var name = '';
+    var seats = 0;
+
+    while (reader.hasNext) {
+      final tag = reader.readTag();
+      switch (tag) {
+        case 1:
+          name = reader.readString();
+        case 2:
+          seats = reader.readInt32();
+        default:
+          reader.skipField();
+      }
+    }
+
+    return SubscriptionPlan(name: name, seats: seats);
   }
 }
 

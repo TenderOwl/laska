@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Users API",
+    "title": "Laska API",
     "version": "0.1.0"
   },
   "paths": {
@@ -297,12 +297,73 @@
         ],
         "additionalProperties": false
       },
+      "Subscription": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "$ref": "#/components/schemas/SubscriptionPlan"
+          },
+          "state": {
+            "type": "string",
+            "$ref": "#/components/schemas/SubscriptionState"
+          },
+          "features": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            }
+          },
+          "cardToken": {
+            "type": "string"
+          },
+          "iban": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan",
+          "state"
+        ],
+        "oneOf": [
+          {
+            "required": [
+              "cardToken",
+              "iban"
+            ]
+          }
+        ],
+        "additionalProperties": false
+      },
+      "SubscriptionPlan": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "seats": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "name",
+          "seats"
+        ],
+        "additionalProperties": false
+      },
       "UserRole": {
         "type": "string",
         "enum": [
           "USER_ROLE_UNSPECIFIED",
           "USER_ROLE_ADMIN",
           "USER_ROLE_MEMBER"
+        ]
+      },
+      "SubscriptionState": {
+        "type": "string",
+        "enum": [
+          "SUBSCRIPTION_STATE_ACTIVE",
+          "SUBSCRIPTION_STATE_PAUSED"
         ]
       }
     }
