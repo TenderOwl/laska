@@ -278,13 +278,17 @@ contains a hand-written proto3 parser). There is no `protoc`, no plugin binary a
 global installation: `laska contract compile` works on a machine that only has the Dart
 SDK.
 
-- The parser covers the subset Laska needs: `syntax`, `package`, `import` (recorded, not
-  resolved), messages with scalar/message/enum/repeated/optional fields, `map` fields, groups of
+- The parser covers the subset Laska needs: `syntax`, `package`, `import` (which
+  are resolved), messages with scalar/message/enum/repeated/optional fields, `map` fields, groups of
   a `oneof`, messages and enums declared inside a message, enums, services and
   `google.api.http` bindings including `additional_bindings` and `body`.
 - The types that are written without a qualifier are resolved the way protobuf resolves them:
-  the scope of the message is searched first, then the scopes the message is declared in.
-- Constructs outside that subset (the well-known types, `proto2`, the extensions) raise a
+  the scope of the message is searched first, then the scopes the message is declared in, and
+  the files the file imports.
+- The well-known types of protobuf (`google.protobuf.Timestamp`, `Duration`, `Any` and `Empty`) are
+  types a contract may use. They live in the runtime and not in the generated code, so every
+  service of a contract speaks of them with the same Dart types.
+- Constructs outside that subset (`proto2`, the extensions) raise a
   `ProtoParseException` with a file and a line — they are never silently ignored.
 - Generated code is formatted with `package:dart_style`, which doubles as a syntax check:
   a generator bug surfaces at compile time instead of in the consumer's build.
@@ -297,8 +301,7 @@ SDK.
 tax the framework promises to remove. A hand-written parser is more work up front and
 strictly less friction afterwards.
 
-**Still to come:** the well-known types (`google.protobuf.Timestamp`, `Duration`, `Any`), proto2
-syntax, the extensions and the resolution of the imports between the files. (`bytes` fields are
+**Still to come:** proto2 syntax and the extensions. (`bytes` fields are
 supported since Phase 4.) When the subset outgrows the parser, `protoc` stays available as a
 cross-check in CI — the generated model is the same either way.
 
@@ -823,7 +826,7 @@ The guide of the examples is `docs/examples.md`.
 |---|---|---|
 | `laska_core` depends on the OpenTelemetry SDK, which pulls in `grpc` and `protobuf` | Every service carries a bigger dependency tree | The `Tracer` abstraction is the seam: the implementation can move to its own package without a change in the API. The SDK stays pure Dart, so the AOT binary still has no native toolchain |
 | The pure-Dart parser drifts from the protobuf specification | Contracts compile here but not with `protoc` | The parser only claims the subset it implements and errors out on everything else; `protoc` stays available as a CI cross-check |
-| The parser has to grow with protobuf (the well-known types, proto2) | Growing maintenance surface | Each addition is a separate, testable step; the contract model does not change when the parser does |
+| The parser has to grow with protobuf (proto2, the extensions) | Growing maintenance surface | Each addition is a separate, testable step; the contract model does not change when the parser does |
 | Foreign-language SDK generation is a maintenance multiplier | Cost per language | Orchestrate upstream protoc plugins; do not maintain our own codegen per language |
 | Codegen maintenance burden grows with every protobuf feature | Phase 2+3 slip | Generate only what we consume; the parser and the generator are separate layers |
 | Dart OTel SDK is beta and its ownership is in flux (donation under review) | Telemetry churn | Own the `Tracer`/`Meter`/`Logger` abstraction; the OTel SDK is one implementation behind it |

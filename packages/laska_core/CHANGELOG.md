@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- The well-known types of protobuf are part of the runtime: `ProtoTimestamp`,
+  `ProtoDuration`, `ProtoAny` and `ProtoEmpty`. They know the wire format and
+  the JSON of the protocol buffers, so every service of a contract speaks of
+  them with the same Dart types.
+
 ## 0.2.0
 
 - A boolean is written with its value now. The writer of the wire format wrote

@@ -172,6 +172,29 @@ message Order {
       );
     });
 
+    test('of the well-known types have to be there', () {
+      expect(
+        () => _compile(<ProtoSource>[
+          ProtoSource('orders.proto', '''
+syntax = "proto3";
+
+package orders.v1;
+
+message Order {
+  google.protobuf.Timestamp placed_at = 1;
+}
+'''),
+        ]),
+        throwsA(
+          isA<ContractCompileException>().having(
+            (error) => error.problems.join('\n'),
+            'problems',
+            contains('google/protobuf/timestamp.proto'),
+          ),
+        ),
+      );
+    });
+
     test('are written as the import of the generated file', () {
       final result = _compile(<ProtoSource>[
         ProtoSource('common.proto', _common),

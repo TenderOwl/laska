@@ -1,5 +1,44 @@
 ## Unreleased
 
+- **The well-known types of protobuf are types a contract may use.** A contract
+  may hold the moment of a day, the span of time, a value of any type and the
+  empty message: the types that protobuf defines for everybody. The parser
+  refused them before.
+  - The types live in the runtime and not in the generated code, so every
+    service of a contract speaks of them with the same Dart types:
+    `google.protobuf.Timestamp` is a `ProtoTimestamp`, `google.protobuf.Duration`
+    is a `ProtoDuration`, and so on.
+  - The JSON of them is the JSON of protobuf: a timestamp is the time in the
+    format of RFC 3339 and a duration is the number of seconds, so a service
+    of Laska and a service of another implementation of protobuf answer the
+    same.
+  - The OpenAPI document describes them: a timestamp is a string of the format
+    `date-time`.
+  - The file that declares a well-known type has to be imported, the way
+    protobuf wants it: a contract that another tool cannot read is a contract
+    that breaks.
+  - A contract may not declare a message that takes the name of one of them:
+    the name of the type of the runtime belongs to the runtime.
+
+- **The imports between the files of a contract are resolved.** The imports
+  were recorded and nothing more: every file of the contract could use every
+  type of every other file, and an import of a file that was not part of the
+  contract was a warning about nothing.
+  - The path of an import is the path of a file of the contract, taken from the
+    directory of the file that imports it.
+  - The types of a file are visible to the files that import it, so a type of a
+    file that is not imported is an error.
+  - A public import passes the types of the imported file to the files that
+    import the file that imports it.
+  - The types that are written without a qualifier are looked up in the files
+    the file imports, so the generated code refers to the type of the file it
+    comes from.
+  - An import that is not used is reported.
+
+- **The generated code reads a field that may be absent out of the JSON.** The
+  message of an optional field was never built, so a contract with an optional
+  message produced code that did not compile.
+
 ## 0.2.0
 
 - **The parser reads the whole of proto3 a service needs.** A contract may hold

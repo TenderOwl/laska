@@ -126,6 +126,104 @@ after the scope it was declared in: the message `Plan` of the message
 resolved the way protobuf resolves them: the scope of the message is searched
 first, then the scopes the message is declared in.
 
+### The well-known types
+
+Every contract of protobuf may use the types that protobuf defines for
+everybody: the moment of a day, the span of time, a value of any type and the
+empty message.
+
+```proto
+import "google/protobuf/timestamp.proto";
+
+message Order {
+  // The moment the order was placed.
+  google.protobuf.Timestamp placed_at = 1;
+}
+```
+
+The types live in the runtime and not in the generated code, so every service
+of a contract speaks of them with the same Dart types:
+| The type of the contract | The type of Dart |
+|---|---|
+| `google.protobuf.Timestamp` | `ProtoTimestamp` |
+| `google.protobuf.Duration` | `ProtoDuration` |
+| `google.protobuf.Any` | `ProtoAny` |
+| `google.protobuf.Empty` | `ProtoEmpty` |
+
+The JSON of them is the JSON of protobuf: a timestamp is the time in the
+format of RFC 3339, and a duration is the number of seconds.
+
+```json
+{"placedAt": "2026-11-19T10:30:15.250Z"}
+```
+
+```dart
+final order = Order(
+  placedAt: ProtoTimestamp.fromDateTime(DateTime.now().toUtc()),
+);
+
+// The date and the time of the order.
+final placedAt = order.placedAt.toDateTime();
+```
+
+A contract may not declare a message that takes the name of one of them: the
+name of the type of the runtime belongs to the runtime.
+
+The file that declares a well-known type has to be imported, the way protobuf
+wants it: the type is in the runtime, but a contract that another tool cannot
+read is a contract that breaks.
+
+```proto
+import "google/protobuf/duration.proto";
+
+message Order {
+  // How long the delivery takes.
+  google.protobuf.Duration delivery_time = 1;
+}
+```
+
+### The files of a contract
+
+A contract may be split into files, and a file may use the types of another
+file.
+
+```proto
+// common.proto
+package common.v1;
+
+message Money {
+  string currency = 1;
+  int64 amount = 2;
+}
+```
+
+```proto
+// orders.proto
+package orders.v1;
+
+import "common.proto";
+
+message Order {
+  common.v1.Money total = 1;
+}
+```
+
+The imports are resolved the way protobuf resolves them: the path of an import
+is the path of a file of the contract, taken from the directory of the file
+that imports it. The types of a file are visible to the files that import it,
+so a type of a file that is not imported is an error:
+
+> The type "common.v1.Money" is used in "orders.proto", but the file
+> "common.proto" that declares it is not imported.
+
+A public import (`import public "common.proto";`) passes the types of the
+imported file to the files that import the file that imports it.
+
+An import that is not used is reported. An import of a file that is not part
+of the contract is reported too: Laska has no include path, so the file
+itself is not read — the annotations of `google.api.http` and of
+`laska.policy` are understood by the parser anyway.
+
 ## The policy of the calls
 
 `option (laska.policy)` describes **how the service is called**, on the

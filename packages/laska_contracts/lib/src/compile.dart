@@ -221,7 +221,22 @@ class ContractCompiler {
         if (scalarTypes.containsKey(reference)) {
           continue;
         }
-        if (wellKnownTypeOf(reference) != null) {
+
+        final wellKnown = wellKnownTypeOf(reference);
+        if (wellKnown != null) {
+          // The type of a well-known type lives in the runtime, but the file
+          // that declares it has to be imported, the way protobuf wants it:
+          // a contract that another tool cannot read is a contract that
+          // breaks.
+          final imported = file.imports.any(
+            (entry) => ImportGraph.normalize(entry.path) == wellKnown.protoPath,
+          );
+          if (!imported) {
+            problems.add(
+              'The type "$reference" is used in "${file.path}", but the file '
+              '"${wellKnown.protoPath}" that declares it is not imported.',
+            );
+          }
           continue;
         }
 

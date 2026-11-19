@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- The well-known types of protobuf are types a contract may use: the moment of
+  a day, the span of time, a value of any type and the empty message. They are
+  compiled into the types of the runtime — `ProtoTimestamp`, `ProtoDuration`,
+  `ProtoAny` and `ProtoEmpty` — and the JSON of them is the JSON of protobuf:
+  a timestamp is the time in the format of RFC 3339 and a duration is the
+  number of seconds.
+- The imports between the files of a contract are resolved: the path of an
+  import is the path of a file of the contract, taken from the directory of the
+  file that imports it, and a type of a file that is not imported is an error.
+  A public import passes the types of the imported file to the files that
+  import the file that imports it.
+- A field that may be absent is read out of the JSON. The message of an
+  optional field was never built, so a contract with an optional message
+  produced code that did not compile.
+
 ## 0.2.0
 
 - The compiler takes the version of the language the generated code is written

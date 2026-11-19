@@ -20,7 +20,7 @@ class ImportGraph {
 
   /// The files of the contract, by their path.
   late final Map<String, ProtoFile> _files = <String, ProtoFile>{
-    for (final file in contract.files) _normalize(file.path): file,
+    for (final file in contract.files) normalize(file.path): file,
   };
 
   /// The file the import [imported] of [file] points to.
@@ -30,10 +30,10 @@ class ImportGraph {
   /// there. The well-known types of protobuf are files of their own, and they
   /// are not part of the contract: their types live in the runtime.
   ProtoFile? resolve(ProtoFile file, ProtoImport imported) {
-    final fromDirectory = _normalize(
+    final fromDirectory = normalize(
       _join(_directory(file.path), imported.path),
     );
-    return _files[fromDirectory] ?? _files[_normalize(imported.path)];
+    return _files[fromDirectory] ?? _files[normalize(imported.path)];
   }
 
   /// The files whose types [file] may use.
@@ -99,7 +99,7 @@ class ImportGraph {
       directory.isEmpty ? path : '$directory/$path';
 
   /// The path [path] without the `.` and the `..` of its parts.
-  static String _normalize(String path) {
+  static String normalize(String path) {
     final parts = <String>[];
     for (final part in path.split('/')) {
       if (part.isEmpty || part == '.') {

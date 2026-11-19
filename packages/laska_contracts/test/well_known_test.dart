@@ -6,6 +6,8 @@ syntax = "proto3";
 
 package shop.v1;
 
+import "google/protobuf/any.proto";
+import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
 // An order of a shop.
@@ -116,6 +118,8 @@ message ProtoTimestamp {
 syntax = "proto3";
 
 package shop.v1;
+
+import "google/protobuf/empty.proto";
 
 service ShopService {
   rpc Ping(google.protobuf.Empty) returns (google.protobuf.Empty);
