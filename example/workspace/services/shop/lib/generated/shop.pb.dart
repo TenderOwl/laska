@@ -1,0 +1,308 @@
+// GENERATED CODE - DO NOT MODIFY BY HAND.
+//
+// Source: shop.proto
+// Regenerate with: laska contract compile
+
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+import 'package:laska_core/laska_core.dart';
+
+// Messages
+
+/// Request of the GetShop method.
+class GetShopRequest {
+  /// Creates a GetShopRequest.
+  const GetShopRequest({required this.id});
+
+  /// Stable identifier of the record.
+  final String id;
+
+  /// Builds a GetShopRequest from its JSON representation.
+  factory GetShopRequest.fromJson(Map<String, dynamic> json) {
+    final id = json['id'];
+    if (id is! String) {
+      throw const FormatException('GetShopRequest.id must be of type String');
+    }
+    return GetShopRequest(id: id);
+  }
+
+  /// The JSON representation of the GetShopRequest.
+  Map<String, dynamic> toJson() => <String, dynamic>{'id': id};
+
+  /// The bytes of the message in the wire format of the protocol buffers.
+  List<int> toProtoBytes() {
+    final writer = ProtoWriter();
+    if (id != '') {
+      writer.writeString(1, id);
+    }
+    return writer.toBytes();
+  }
+
+  /// Reads a message out of the wire format of the protocol buffers.
+  factory GetShopRequest.fromProtoBytes(List<int> bytes) {
+    final reader = ProtoReader(bytes);
+    var id = '';
+
+    while (reader.hasNext) {
+      final tag = reader.readTag();
+      switch (tag) {
+        case 1:
+          id = reader.readString();
+        default:
+          reader.skipField();
+      }
+    }
+
+    return GetShopRequest(id: id);
+  }
+}
+
+/// A record of the application.
+class Shop {
+  /// Creates a Shop.
+  const Shop({required this.id, required this.name});
+
+  /// Stable identifier of the record.
+  final String id;
+
+  /// Name of the record.
+  final String name;
+
+  /// Builds a Shop from its JSON representation.
+  factory Shop.fromJson(Map<String, dynamic> json) {
+    final id = json['id'];
+    if (id is! String) {
+      throw const FormatException('Shop.id must be of type String');
+    }
+    final name = json['name'];
+    if (name is! String) {
+      throw const FormatException('Shop.name must be of type String');
+    }
+    return Shop(id: id, name: name);
+  }
+
+  /// The JSON representation of the Shop.
+  Map<String, dynamic> toJson() => <String, dynamic>{'id': id, 'name': name};
+
+  /// The bytes of the message in the wire format of the protocol buffers.
+  List<int> toProtoBytes() {
+    final writer = ProtoWriter();
+    if (id != '') {
+      writer.writeString(1, id);
+    }
+    if (name != '') {
+      writer.writeString(2, name);
+    }
+    return writer.toBytes();
+  }
+
+  /// Reads a message out of the wire format of the protocol buffers.
+  factory Shop.fromProtoBytes(List<int> bytes) {
+    final reader = ProtoReader(bytes);
+    var id = '';
+    var name = '';
+
+    while (reader.hasNext) {
+      final tag = reader.readTag();
+      switch (tag) {
+        case 1:
+          id = reader.readString();
+        case 2:
+          name = reader.readString();
+        default:
+          reader.skipField();
+      }
+    }
+
+    return Shop(id: id, name: name);
+  }
+}
+
+// Service ShopService
+
+/// ShopService manages the records of the application.
+abstract class ShopService {
+  /// GetShop returns a single record by its identifier.
+  Future<Shop> getShop(GetShopRequest request);
+}
+
+/// Registers the REST projection of [service] on [app].
+void registerShopService(
+  Laska app,
+  ShopService service, {
+  List<Middleware> middleware = const <Middleware>[],
+}) {
+  app.get('/v1/shop/:id', (ctx) async {
+    final payload = <String, dynamic>{};
+    payload['id'] = ctx.params['id']!;
+    final request = GetShopRequest.fromJson(payload);
+    final response = await service.getShop(request);
+    return ctx.json(response.toJson());
+  }, middleware: middleware);
+}
+
+/// The policies of the methods of the `ShopService` service.
+///
+/// The policies come from the `laska.policy` annotations of the
+/// contract, so the way a method is called is visible in the
+/// contract itself and not only in the code of the caller.
+class ShopServicePolicies {
+  const ShopServicePolicies._();
+
+  /// The policy of the `GetShop` method.
+  static final DependencyPolicy getShop = DependencyPolicy(
+    timeout: Duration(seconds: 2),
+    retry: RetryPolicy(
+      maxAttempts: 3,
+      initialBackoff: Duration(milliseconds: 100),
+      maxBackoff: Duration(seconds: 2),
+      jitter: true,
+    ),
+    idempotent: true,
+  );
+
+  /// The policies of the methods, by the name of the method.
+  static final Map<String, DependencyPolicy> policies =
+      <String, DependencyPolicy>{'GetShop': getShop};
+}
+
+/// Typed client for the `ShopService` service.
+class ShopServiceClient {
+  /// Creates a client talking to [baseUrl].
+  ShopServiceClient({
+    required this.baseUrl,
+    ServiceTransport? transport,
+    http.Client? httpClient,
+    Duration timeout = const Duration(seconds: 2),
+    Tracer? tracer,
+    String dependencyName = 'ShopService',
+    DependencyPolicy policy = const DependencyPolicy(),
+    Map<String, DependencyPolicy>? policies,
+  })  : _transport = transport ??
+            HttpServiceTransport(baseUrl: baseUrl, client: httpClient),
+        // ignore: prefer_initializing_formals
+        _timeout = timeout,
+        // ignore: prefer_initializing_formals
+        _tracer = tracer,
+        // ignore: prefer_initializing_formals
+        _dependencyName = dependencyName,
+        // ignore: prefer_initializing_formals
+        _policy = policy,
+        // ignore: prefer_initializing_formals
+        _policies = <String, DependencyPolicy>{
+          ...ShopServicePolicies.policies,
+          ...?policies,
+        };
+
+  /// Base URL of the service, e.g. `http://localhost:8080`.
+  final String baseUrl;
+
+  /// The transport the calls go through.
+  final ServiceTransport _transport;
+
+  /// The timeout of the calls that have no policy of their own.
+  final Duration _timeout;
+
+  /// The tracer of the client, when the calls are traced.
+  final Tracer? _tracer;
+
+  /// The name of the dependency the calls go to.
+  final String _dependencyName;
+
+  /// The policy of the dependency.
+  ///
+  /// It holds the circuit breaker and the bulkhead of the
+  /// dependency, which every call of the client shares.
+  final DependencyPolicy _policy;
+
+  /// The policy of every method, by the name of the method.
+  final Map<String, DependencyPolicy> _policies;
+
+  /// The dependency the calls go through.
+  ///
+  /// The dependency holds the circuit breaker and the bulkhead
+  /// of the service, so every call of the client shares them.
+  late final Dependency _dependency = Dependency(
+    name: _dependencyName,
+    transport: _transport,
+    policy: _policy,
+    tracer: _tracer,
+  );
+
+  /// GetShop returns a single record by its identifier.
+  Future<Shop> getShop(GetShopRequest request, {String? idempotencyKey}) async {
+    final uri = _transport.buildUri(
+      '/v1/shop/${Uri.encodeComponent(request.id.toString())}',
+      '/shop.v1.ShopService/GetShop',
+    );
+
+    final headers = <String, String>{'accept': 'application/json'};
+
+    if (idempotencyKey != null) {
+      headers['idempotency-key'] = idempotencyKey;
+    }
+
+    final body = null;
+
+    final response = await _send(
+      'GetShop',
+      'ShopService.GetShop',
+      'get',
+      uri,
+      headers,
+      body,
+    );
+
+    return _transport.bodyFormat == BodyFormat.protobuf
+        ? Shop.fromProtoBytes(response.body)
+        : Shop.fromJson(jsonDecode(response.text) as Map<String, dynamic>);
+  }
+
+  /// Sends the request of a method of the service.
+  ///
+  /// The policy of the method decides how the call is timed out,
+  /// how often it is retried and whether it may be retried at all.
+  Future<TransportResponse> _send(
+    String method,
+    String operation,
+    String verb,
+    Uri uri,
+    Map<String, String> headers,
+    List<int>? body,
+  ) async {
+    final methodPolicy = _policies[method];
+    final effectivePolicy = methodPolicy == null
+        ? DependencyPolicy(timeout: _timeout)
+        : methodPolicy.copyWith(timeout: methodPolicy.timeout ?? _timeout);
+    try {
+      return await _dependency.call(
+        TransportRequest(
+          method: verb,
+          uri: uri,
+          headers: headers,
+          body: body,
+          contentType: body == null
+              ? null
+              : _transport.bodyFormat == BodyFormat.protobuf
+                  ? "application/protobuf"
+                  : "application/json",
+        ),
+        policy: effectivePolicy,
+        operation: operation,
+        attributes: <String, Object?>{
+          'http.request.method': verb,
+          'url.path': uri.path,
+        },
+      );
+    } on DependencyFailure catch (error) {
+      throw LaskaApiException(error.statusCode ?? 502, error.body);
+    } on DependencyTimeoutException catch (error) {
+      throw LaskaApiException(504, error.toString());
+    } on CircuitOpenException catch (error) {
+      throw LaskaApiException(503, error.toString());
+    } on BulkheadFullException catch (error) {
+      throw LaskaApiException(503, error.toString());
+    }
+  }
+}

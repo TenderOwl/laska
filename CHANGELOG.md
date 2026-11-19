@@ -36,6 +36,25 @@
   and the pipeline checks that every package is ready to be published before a
   release.
 
+- **The generated code is written in the style of the package it goes into.**
+  The generator wrote the code in the newest style of the formatter, while
+  `dart format` picks the style by the version of the SDK the package declares:
+  the code of a service was rewritten by the formatter right after it was
+  generated, and the check of the formatting of the project failed. The
+  command reads the version of the SDK of the package and writes the code in
+  the style of that version.
+
+- **A workspace of two services is an example of the repository.**
+  `example/workspace` holds the two services and the manifest that ties them
+  together. Its files are exactly the files that `laska new shop` writes, so
+  the example is the proof that the command gives a project that runs: `laska
+  dev` starts the services in the order of their dependencies, and the second
+  service calls the first one through the client of its contract, so the call
+  carries the policy of the contract and the trace of the request.
+- **The scaffold writes imports that the linter accepts.** The generated code
+  imported the library of the service with a relative path, which the lints of
+  the framework forbid. The imports are `package:` imports now.
+
 - **The examples of the repository:**
   - `example/auth_service` shows how a caller proves who it is: a token, a scope
     of the token, the API key of a machine and the session of a browser. The

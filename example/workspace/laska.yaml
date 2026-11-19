@@ -1,0 +1,8 @@
+services:
+  - name: shop
+    entrypoint: services/shop/bin/server.dart
+    port: 8080
+  - name: shop_gateway
+    entrypoint: services/shop_gateway/bin/server.dart
+    port: 8081
+    depends_on: [shop]

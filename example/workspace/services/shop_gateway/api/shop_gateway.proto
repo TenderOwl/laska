@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package shop_gateway.v1;
+
+// ShopGatewayService manages the records of the application.
+service ShopGatewayService {
+  // The policy of the calls to the service.
+  option (laska.policy) = {
+    timeout_ms: 2000
+    max_attempts: 3
+    backoff_ms: 100
+    max_backoff_ms: 2000
+    jitter: true
+  };
+
+  // GetShopView returns a single record by its identifier.
+  rpc GetShopView(GetShopViewRequest) returns (ShopView) {
+    option (google.api.http) = { get: "/v1/shop_gateway/{id}" };
+    option (laska.policy) = { idempotent: true };
+  }
+}
+
+// Request of the GetShopView method.
+message GetShopViewRequest {
+  // Stable identifier of the record.
+  string id = 1;
+}
+
+// A record of the application.
+message ShopView {
+  // Stable identifier of the record.
+  string id = 1;
+
+  // Name of the record.
+  string name = 2;
+}

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The compiler takes the version of the language the generated code is written
+  for. The style of the formatter depends on it, and it has to be the style of
+  the package the code goes into: `dart format` picks the style by the version
+  of the SDK the package declares.
 - The parser reads the whole of proto3 a service needs: `map` fields, groups of
   a `oneof`, and messages and enums that are declared inside a message. The
   types that are written without a qualifier are resolved the way protobuf

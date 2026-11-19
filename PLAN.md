@@ -790,6 +790,7 @@ repository, so a change of the framework that breaks them is caught before it is
 | `example/contract_slice` | The vertical slice: the contract, the generated code, the service and the client. |
 | `example/auth_service` | The authentication of the callers: the tokens, the scopes, the API keys, the sessions and the limits. |
 | `example/database_service` | The data layer: the migrations, the repository, the transactions and the readiness of the service. |
+| `example/workspace` | A workspace of two services: the service that keeps the records and the one that calls it through the client of its contract. |
 
 The guide of the examples is `docs/examples.md`.
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- `laska contract compile` writes the code in the style of the package it goes
+  into: the command reads the version of the SDK the package declares, and the
+  formatter writes the code the way `dart format` of that package would.
+- The scaffolded code imports the library of the service with a `package:`
+  import, which the lints of the framework accept.
+
 ## 0.1.0
 
 - The first release of the command line interface: `laska new`, `laska contract

@@ -34,6 +34,7 @@ packages of the framework are published on pub.dev.
 | `example/contract_slice` | A working vertical slice: contract → generated code → service → client. |
 | `example/auth_service` | The authentication of the callers: tokens, scopes, API keys, sessions and the limits. |
 | `example/database_service` | The data layer of a service: migrations, a repository, transactions and the readiness. |
+| `example/workspace` | A workspace of two services: the one that keeps the records and the one that calls it. |
 
 ## Installation
 
@@ -532,6 +533,11 @@ proof is missing.
 `example/database_service` shows the data layer of a service: the migrations of the schema in
 plain SQL, a repository that owns the queries, and a transfer that moves money in one
 transaction, so the balances and the ledger never disagree.
+
+`example/workspace` holds the two services and the manifest that ties them together — the files
+are exactly the files that `laska new shop` writes. The second service calls the first one
+through the client of its contract, so the call carries the policy of the contract and the trace
+of the request: the two services answer with one trace.
 
 The guide of the examples is [docs/examples.md](docs/examples.md).
 

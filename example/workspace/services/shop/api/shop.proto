@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package shop.v1;
+
+// ShopService manages the records of the application.
+service ShopService {
+  // The policy of the calls to the service.
+  option (laska.policy) = {
+    timeout_ms: 2000
+    max_attempts: 3
+    backoff_ms: 100
+    max_backoff_ms: 2000
+    jitter: true
+  };
+
+  // GetShop returns a single record by its identifier.
+  rpc GetShop(GetShopRequest) returns (Shop) {
+    option (google.api.http) = { get: "/v1/shop/{id}" };
+    option (laska.policy) = { idempotent: true };
+  }
+}
+
+// Request of the GetShop method.
+message GetShopRequest {
+  // Stable identifier of the record.
+  string id = 1;
+}
+
+// A record of the application.
+message Shop {
+  // Stable identifier of the record.
+  string id = 1;
+
+  // Name of the record.
+  string name = 2;
+}
