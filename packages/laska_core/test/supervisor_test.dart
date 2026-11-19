@@ -41,6 +41,19 @@ void main() {
       .where((file) => file.path.endsWith('.txt'))
       .length;
 
+  /// The report of the worker [worker], empty while it has none.
+  ///
+  /// The worker writes the report itself, so the file can be seen in the
+  /// directory before it holds anything. The report is complete when it ends
+  /// with the line feed the worker writes.
+  String report(int worker) {
+    final file = File('${directory.path}/worker-$worker.txt');
+    if (!file.existsSync()) {
+      return '';
+    }
+    return file.readAsStringSync();
+  }
+
   group('Supervisor', () {
     test('uses the number of cores by default', () {
       final supervisor = Supervisor(
@@ -119,16 +132,12 @@ void main() {
         await run;
       });
 
-      await waitFor(() => reportCount() >= 2);
+      await waitFor(
+        () => report(0).endsWith('\n') && report(1).endsWith('\n'),
+      );
 
-      expect(
-        File('${directory.path}/worker-0.txt').readAsStringSync().trim(),
-        '0 4321 127.0.0.1',
-      );
-      expect(
-        File('${directory.path}/worker-1.txt').readAsStringSync().trim(),
-        '1 4321 127.0.0.1',
-      );
+      expect(report(0).trim(), '0 4321 127.0.0.1');
+      expect(report(1).trim(), '1 4321 127.0.0.1');
       expect(supervisor.runningWorkers, 2);
     });
 
