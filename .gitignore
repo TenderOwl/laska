@@ -10,3 +10,7 @@ build/
 
 # Directory created by dartdoc
 doc/api/
+
+# The database of the example of the data layer
+example/database_service/laska.db
+example/database_service/laska.db-journal
