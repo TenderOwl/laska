@@ -22,8 +22,8 @@ live in [docs/](docs/README.md).
 
 Active development, **not for production use**. The core runtime, the contract pipeline, the
 observability layer, the resilience layer, the workspace tooling and the release hardening are
-implemented and working end to end (see below); the foreign-language SDKs and the publication of
-the packages are still to come.
+implemented and working end to end (see below); the foreign-language SDKs are still to come. The
+packages of the framework are published on pub.dev.
 
 | Package | What it holds |
 |---|---|
@@ -32,6 +32,8 @@ the packages are still to come.
 | `packages/laska_cli` | The `laska` command line interface. |
 | `packages/laska_test` | The test harness: an in-process HTTP client, expectation helpers, database helpers, a fake tracer and a fake transport. |
 | `example/contract_slice` | A working vertical slice: contract → generated code → service → client. |
+| `example/auth_service` | The authentication of the callers: tokens, scopes, API keys, sessions and the limits. |
+| `example/database_service` | The data layer of a service: migrations, a repository, transactions and the readiness. |
 
 ## Installation
 
@@ -517,11 +519,21 @@ $ dart run tool/check.dart
 The script formats the repository, runs the analyzer and the tests of every package. The same
 runs in CI via `.github/workflows/ci.yml`.
 
-## The example
+## The examples
 
 `example/contract_slice` is a complete vertical slice: a contract, the generated code, a service
 implementation and an integration test that starts the server, calls it through the generated
 client, checks the OpenAPI document and fails if the generated code is out of date.
+
+`example/auth_service` shows how a caller proves who it is — with a token, a scope of the token,
+the API key of a machine or the session of a browser — and what the service answers when the
+proof is missing.
+
+`example/database_service` shows the data layer of a service: the migrations of the schema in
+plain SQL, a repository that owns the queries, and a transfer that moves money in one
+transaction, so the balances and the ledger never disagree.
+
+The guide of the examples is [docs/examples.md](docs/examples.md).
 
 ## License
 

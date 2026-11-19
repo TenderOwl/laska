@@ -1,5 +1,24 @@
 ## Unreleased
 
+- **The examples of the repository:**
+  - `example/auth_service` shows how a caller proves who it is: a token, a scope
+    of the token, the API key of a machine and the session of a browser. The
+    middleware of the routes is registered under a name, so a route says what
+    it needs, and the refusal never tells what is wrong with the secret of the
+    caller.
+  - `example/database_service` shows the data layer of a service: the schema in
+    plain SQL files, the migrations recorded in the table `schema_migrations`,
+    a repository that owns the queries, and a transfer that moves money in one
+    transaction, so the balances and the ledger never disagree.
+  - The guide of the examples is `docs/examples.md`.
+
+- **A refusal inside a transaction keeps its status.** The body of a transaction
+  often refuses the work of the caller — an account that does not exist, an
+  amount the account does not hold. Such a refusal was wrapped into a failure
+  of the database, so the caller got a `500` instead of the `404` or the `422`
+  the service meant to answer. The transaction keeps the refusal of the service
+  as it is now, and only the failure of the database itself is wrapped.
+
 - **The distribution of the framework:**
   - **The packages of the framework are published on pub.dev** as `laska_core`,
     `laska_contracts`, `laska_test` and `laska_cli`, version `0.1.0`. The command of

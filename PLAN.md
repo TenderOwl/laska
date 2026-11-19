@@ -772,6 +772,19 @@ by hand — pub.dev only allows the automated publishing of the packages that al
 and the later versions are published by the tag, without a secret in the repository: the
 token of pub.dev is a temporary one, which GitHub signs for the audience of pub.dev.
 
+### The examples of the repository
+
+The examples are real services that run and whose tests are part of the gate of the
+repository, so a change of the framework that breaks them is caught before it is published.
+
+| Example | What it holds |
+|---|---|
+| `example/contract_slice` | The vertical slice: the contract, the generated code, the service and the client. |
+| `example/auth_service` | The authentication of the callers: the tokens, the scopes, the API keys, the sessions and the limits. |
+| `example/database_service` | The data layer: the migrations, the repository, the transactions and the readiness of the service. |
+
+The guide of the examples is `docs/examples.md`.
+
 ### Totals
 
 | Milestone | Scope | Effort |

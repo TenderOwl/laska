@@ -17,6 +17,7 @@ built into the runtime.
 | [Upgrading](upgrading.md) | How a service moves to a new version of the framework or of its own API. |
 | [Compatibility](compatibility.md) | The matrix of the versions of a contract: which client works against which server. |
 | [Performance](performance.md) | The hot path of the runtime, its budget and the benchmark. |
+| [Examples](examples.md) | The examples of the repository: the vertical slice, the authentication and the data layer. |
 
 The long-term design and the roadmap live in [PLAN.md](../PLAN.md) at the root
 of the repository. The commands of the CLI are described by their own help:

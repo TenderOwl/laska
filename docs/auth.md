@@ -202,3 +202,7 @@ and the scope of an API key is the list of its `scopes`.
 | `x-api-key: <key>` | `apiKeyMiddleware(guard)` | `ctx.request.apiKey`, `ctx.request.principal` |
 | `Cookie: laska_session=<id>` | `sessionMiddleware(store)` | `ctx.request.session`, `ctx.request.principal` |
 | — | `rateLimitMiddleware(limiter)` | — |
+
+The example of the repository, `example/auth_service`, puts all of it into a
+service that runs: the tokens, the scopes, the API keys, the sessions and the
+limits. It is described in [examples.md](examples.md).
