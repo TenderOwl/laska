@@ -203,11 +203,13 @@ Future<ScaffoldResult> scaffoldService(
     dependency == null
         ? _entrypoint(
             name: snake,
+            package: '${snake}_service',
             service: serviceName,
             generated: generated,
           )
         : _entrypointWithDependency(
             name: snake,
+            package: '${snake}_service',
             service: serviceName,
             generated: generated,
             dependency: dependency,
@@ -220,12 +222,14 @@ Future<ScaffoldResult> scaffoldService(
     dependency == null
         ? _test(
             name: snake,
+            package: '${snake}_service',
             service: serviceName,
             path: path,
             generated: generated,
           )
         : _testWithDependency(
             name: snake,
+            package: '${snake}_service',
             service: serviceName,
             path: path,
             generated: generated,
@@ -450,7 +454,7 @@ class ${service}Impl implements $service {
 
   @override
   Future<$responseType> $method($requestType request) async {
-    final record;
+    final ${dependency.responseType} record;
     try {
       record = await ${dependency.name}.${camelCase(dependency.method)}(
         ${dependency.requestType}(id: request.id),
@@ -474,13 +478,13 @@ class ${service}Impl implements $service {
 /// The entrypoint of the scaffolded service.
 String _entrypoint({
   required String name,
+  required String package,
   required String service,
   required String generated,
 }) =>
     '''import 'package:laska_core/laska_core.dart';
-
-import '../lib/generated/$generated';
-import '../lib/${name}_service.dart';
+import 'package:$package/generated/$generated';
+import 'package:$package/${name}_service.dart';
 
 Future<void> main(List<String> arguments) async {
   final app = Laska();
@@ -499,6 +503,7 @@ Future<void> main(List<String> arguments) async {
 /// The entrypoint of the scaffolded service that calls another service.
 String _entrypointWithDependency({
   required String name,
+  required String package,
   required String service,
   required String generated,
   required ServiceDependency dependency,
@@ -506,10 +511,9 @@ String _entrypointWithDependency({
     '''import 'dart:io';
 
 import 'package:laska_core/laska_core.dart';
+import 'package:$package/generated/$generated';
+import 'package:$package/${name}_service.dart';
 import 'package:${dependency.package}/generated/${dependency.generated}';
-
-import '../lib/generated/$generated';
-import '../lib/${name}_service.dart';
 
 Future<void> main(List<String> arguments) async {
   final app = Laska();
@@ -543,6 +547,7 @@ Future<void> main(List<String> arguments) async {
 /// The test of the scaffolded service.
 String _test({
   required String name,
+  required String package,
   required String service,
   required String path,
   required String generated,
@@ -551,8 +556,8 @@ String _test({
 import 'package:laska_test/laska_test.dart';
 import 'package:test/test.dart';
 
-import '../lib/generated/$generated';
-import '../lib/${name}_service.dart';
+import 'package:$package/generated/$generated';
+import 'package:$package/${name}_service.dart';
 
 void main() {
   test('the service answers with the record it keeps', () async {
@@ -583,6 +588,7 @@ void main() {
 /// exercises the whole path without opening a socket.
 String _testWithDependency({
   required String name,
+  required String package,
   required String service,
   required String path,
   required String generated,
@@ -590,11 +596,10 @@ String _testWithDependency({
 }) =>
     '''import 'package:laska_core/laska_core.dart';
 import 'package:laska_test/laska_test.dart';
+import 'package:$package/generated/$generated';
+import 'package:$package/${name}_service.dart';
 import 'package:${dependency.package}/generated/${dependency.generated}';
 import 'package:test/test.dart';
-
-import '../lib/generated/$generated';
-import '../lib/${name}_service.dart';
 
 void main() {
   test('the service answers with the record of the service behind it',
