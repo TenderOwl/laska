@@ -150,7 +150,7 @@ gRPC transports, the contract linter, the scaffolder, the test harness and the C
 Pub workspace monorepo (Dart 3.6+ workspaces; SDK 3.14 is available locally).
 
 ```
-laska/                    # the umbrella package — what apps depend on
+laska/                    # the umbrella of the repository — the root of the workspace
 ├── packages/
 │   ├── laska_core/        # app, router, request/response, middleware, config, logger,
 │   │                      # errors, supervisor, telemetry, resilience, SQL migrations
@@ -169,7 +169,12 @@ feature that gets adopted only if it is one import away. `laska_contracts` is se
 its dependency surface (codegen, protoc, buf) differs from the runtime and would otherwise
 weigh down every service that only wants to serve HTTP.
 
-All packages version in lockstep. The umbrella package `laska` pins the rest.
+All packages version in lockstep, and the gate of the repository checks it: a
+version that drifts between the packages of the workspace breaks the
+publication, so `tool/check.dart` refuses it. The root of the repository is the
+umbrella `laska` — it re-exports the runtime — but a workspace root cannot be
+published, so a service depends on `laska_core`, and on `laska_contracts` for
+the codegen.
 
 ---
 
@@ -839,8 +844,9 @@ Resolve during the relevant phase, not now:
   transactional outbox landed in Phase 4; the broker itself is still open.
 - Language priority for foreign client SDKs (Go first, then PHP/Python/TS) — Phase 2.
 - Whether `laska` ships a VS Code extension / language server — after v1.0.
-- Whether the umbrella package `laska` is published to pub.dev or stays a workspace root — before
-  the first release.
+- ~~Whether the umbrella package `laska` is published to pub.dev or stays a workspace root~~ —
+  resolved at the first release: it stays a workspace root, because a workspace root cannot be
+  published, so a service depends on `laska_core`.
 
 ---
 

@@ -1,6 +1,6 @@
 name: laska
 description: A contract-first service framework for Dart.
-version: 0.1.0-wip
+version: 0.1.0
 publish_to: none
 
 environment:
