@@ -39,6 +39,25 @@
   message of an optional field was never built, so a contract with an optional
   message produced code that did not compile.
 
+- **A service of a contract answers over gRPC.** The contract spoke two
+  transports on the side of the caller only: a service answered over HTTP, and
+  a caller could speak gRPC. The server side was missing, so the contract of a
+  service could not be reached by a service written in another language.
+  - The runtime serves the methods of a contract under the name of the
+    contract, e.g. `/users.v1.UsersService/GetUser`, and the body of the call
+    is the request message in the wire format of the protocol buffers.
+  - One registration of the service serves the contract on both transports:
+    `registerUsersService(app, service)` puts the routes of the REST
+    projection and the methods of the contract in place.
+  - A call over gRPC goes through the middleware of the application, so a
+    service that is protected over HTTP is protected over gRPC too, and the
+    metadata of the call reaches the middleware as the headers of the request.
+  - An error of the service keeps its status: a `HttpException(404, ...)` is
+    answered with the status `NOT_FOUND` of the protocol of gRPC.
+  - A method without a `google.api.http` binding is reachable over gRPC only.
+  - A service that does not want to answer over gRPC says so:
+    `registerUsersService(app, service, grpc: false)`.
+
 ## 0.2.0
 
 - **The parser reads the whole of proto3 a service needs.** A contract may hold

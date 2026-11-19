@@ -39,6 +39,10 @@ Its test starts the server, checks the OpenAPI document and fails if the
 generated code is out of date — so the contract never drifts away from the
 code.
 
+The example serves the contract on both transports: the REST projection on the
+port 8080 and the methods of the contract on the port 50051. Its test calls the
+service over HTTP and over gRPC and checks that the answers are the same.
+
 The guide of the contracts is [contracts.md](contracts.md).
 
 ## The authentication of the callers

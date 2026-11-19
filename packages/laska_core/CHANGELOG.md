@@ -6,6 +6,14 @@
   `ProtoDuration`, `ProtoAny` and `ProtoEmpty`. They know the wire format and
   the JSON of the protocol buffers, so every service of a contract speaks of
   them with the same Dart types.
+- The gRPC server of a service: `GrpcServer` serves the services registered on
+  the application, and `serveGrpc(app)` starts one. A call goes through the
+  middleware of the application, and an error of the service keeps its status:
+  a `HttpException(404, ...)` is answered with the status `NOT_FOUND` of the
+  protocol of gRPC.
+- `run(app, grpcPort: 50051)` starts the gRPC server of the application next
+  to the HTTP one.
+- The registry of the gRPC services of an application is `app.grpc`.
 
 ## 0.2.0
 

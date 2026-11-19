@@ -322,3 +322,44 @@ final client = UsersServiceClient(
 
 The binary codec is pure Dart, so a contract keeps its wire format without
 `protoc` on the machine of the service.
+
+## The gRPC server
+
+A service of a contract answers over HTTP and over gRPC, and one
+registration serves both:
+
+```dart
+final app = Laska();
+registerUsersService(app, UsersServiceImpl());
+
+await run(app, grpcPort: 50051);
+```
+
+The gRPC server answers the methods of the contract under the name of the
+contract, e.g. `/users.v1.UsersService/GetUser`. A caller that speaks gRPC —
+a service written in another language, a tool of the ecosystem — reaches the
+same implementation the REST projection reaches.
+
+- The body of the call is the request message of the contract in the wire
+  format of the protocol buffers, and the answer is the response message in
+  the same format.
+- A call goes through the middleware of the application, so a service that is
+  protected over HTTP is protected over gRPC too. The metadata of the call
+  reaches the middleware as the headers of the request.
+- An error of the service keeps its status: a `HttpException(404, ...)` is
+  answered with the status `NOT_FOUND` of the protocol of gRPC, and the
+  message of the error travels with it.
+- A method without a `google.api.http` binding is reachable over gRPC only,
+  and the compiler says so.
+
+The server may have a port of its own, when the service needs one:
+
+```dart
+final server = await serveGrpc(app, address: '127.0.0.1', port: 50051);
+```
+
+A service that does not want to answer over gRPC says so:
+
+```dart
+registerUsersService(app, UsersServiceImpl(), grpc: false);
+```

@@ -16,6 +16,15 @@
 - A field that may be absent is read out of the JSON. The message of an
   optional field was never built, so a contract with an optional message
   produced code that did not compile.
+- The generated code registers the service of a contract over gRPC next to its
+  REST projection: the methods of the contract are served under the name of the
+  contract, e.g. `/users.v1.UsersService/GetUser`, and the body of the call is
+  the request message in the wire format of the protocol buffers. A service
+  that does not want to answer over gRPC says so: `grpc: false`.
+- The generated client sends the whole request message over gRPC, the way the
+  protocol of the contract says, and keeps the body of the REST projection over
+  HTTP.
+- A method without a `google.api.http` binding is reachable over gRPC only.
 
 ## 0.2.0
 

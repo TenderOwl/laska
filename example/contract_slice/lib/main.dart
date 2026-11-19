@@ -20,5 +20,8 @@ Future<void> main(List<String> arguments) async {
     return ctx.text('Laska is here!');
   });
 
-  await run(app, arguments: arguments, port: 8080);
+  // The contract of the service is served on both transports: the REST
+  // projection on the port of the HTTP server and the methods of the contract
+  // on the port of the gRPC server.
+  await run(app, arguments: arguments, port: 8080, grpcPort: 50051);
 }

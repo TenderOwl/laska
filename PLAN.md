@@ -251,15 +251,17 @@ From this single file Laska produces:
 | Breaking-change report (`laska contract diff`) | CI | done |
 | Binary protobuf codec (pure Dart) | wire compatibility with other languages | done |
 | gRPC client transport for the same contract | other services | done |
-| gRPC service descriptor + server stub | other services | planned |
+| gRPC service descriptor + server stub | other services | done |
 | PHP/Python/Go/TS client SDKs | consumers in other languages | planned |
 
 **Wire format of the slice:** the generated messages follow the protobuf JSON mapping
 (field names in lowerCamelCase, enums by their proto name), and the REST projection speaks
 JSON. The binary protobuf codec and the gRPC client transport are Phase 4 work — they are done:
 every message has `toProtoBytes()`/`fromProtoBytes()`, and the same generated client talks HTTP
-with JSON or gRPC with protobuf, chosen by the transport it is given. The gRPC *server* side and
-the foreign-language SDKs are what is left.
+with JSON or gRPC with protobuf, chosen by the transport it is given. The gRPC *server* side is
+done as well: the runtime serves the methods of the contract under the name of the contract, so
+one registration of the service answers on both transports. The foreign-language SDKs are what
+is left.
 
 
 **Why protobuf and not OpenAPI-first:** protobuf is the only contract format with a mature
@@ -680,10 +682,12 @@ as specified, with tests — **done**. The behaviour is pinned by 102 tests in
 - [x] Drift check: the example fails if the checked-in generated code is out of date.
 - [ ] Foreign-language client generation (`--lang=go` first, then PHP/Python/TS).
 - [x] Binary protobuf codec and the gRPC transport (client side — done in Phase 4).
+- [x] The gRPC server: the runtime serves the methods of a contract, and the generated code
+      registers the service of a contract over gRPC next to its REST projection.
 
-**Done when:** one `.proto` produces a working REST endpoint, a Dart client, an OpenAPI
-document and a CI check that fails on a breaking change — **done**; the gRPC server stub and
-the foreign-language SDKs are what is left.
+**Done when:** one `.proto` produces a working REST endpoint, a gRPC endpoint, a Dart client, an
+OpenAPI document and a CI check that fails on a breaking change — **done**; the foreign-language
+SDKs are what is left.
 
 
 ### Phase 3 — Observability (10–14 days) — **done**
@@ -870,8 +874,10 @@ service, and the release hardening closed the gaps a v1.0 cannot have.
 2. **The SDKs of the other languages** — the generator writes the Dart client today; the Go client
    comes first, then the Python, the TypeScript and the PHP ones. Every SDK is generated from the
    same contract, so the clients of a service agree with each other by construction.
-3. **The gRPC server side** — the runtime speaks gRPC to the services it calls, and the server side
-   of the contract is still missing.
+3. **The gRPC server of the contract is done** — the runtime serves the methods of a contract under
+   the name of the contract, and the generated code registers the service over gRPC next to its REST
+   projection. What is left is the reflection of the server, so a tool of the ecosystem discovers
+   the methods of a running service.
 
 Deferred to v1.1: the `@injectable` codegen, the ORM adapters and the Redis and NATS backends.
 
