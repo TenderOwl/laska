@@ -5,6 +5,7 @@ import 'dart:io';
 import 'app.dart';
 import 'buffers.dart';
 import 'db/migrations.dart';
+import 'grpc.dart';
 import 'request.dart';
 import 'supervisor.dart';
 
@@ -218,11 +219,16 @@ Future<HttpServer> serve(
 ///
 /// When the process was started by the supervisor, the address, the port and
 /// the shared socket are taken from the environment.
+///
+/// The gRPC server of the application is started as well when [grpcPort] is
+/// given: the services registered on the application answer over gRPC on
+/// that port.
 Future<HttpServer> run(
   Laska app, {
   List<String> arguments = const <String>[],
   Object address = '0.0.0.0',
   int port = 3789,
+  int? grpcPort,
   bool shared = false,
   Duration drainTimeout = const Duration(seconds: 30),
 }) async {
@@ -255,7 +261,22 @@ Future<HttpServer> run(
   );
 
   final httpServer = await server.start();
-  _installSignalHandlers(server);
+
+  GrpcServer? grpcServer;
+  if (grpcPort != null) {
+    grpcServer = await serveGrpc(
+      app,
+      address: environmentAddress ??
+          (address is String ? address : address.toString()),
+      port: grpcPort,
+    );
+    stdout.writeln(
+      '=> Laska listening on grpc://${httpServer.address.host}:'
+      '${grpcServer.port}',
+    );
+  }
+
+  _installSignalHandlers(server, grpcServer);
 
   stdout.writeln(
     '=> Laska listening on http://${httpServer.address.host}:${httpServer.port}',
@@ -263,9 +284,10 @@ Future<HttpServer> run(
   return httpServer;
 }
 
-void _installSignalHandlers(LaskaServer server) {
+void _installSignalHandlers(LaskaServer server, [GrpcServer? grpcServer]) {
   Future<void> handle() async {
     await server.stop();
+    await grpcServer?.stop();
     exit(0);
   }
 

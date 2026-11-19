@@ -79,6 +79,15 @@ class ProtoWriter {
     _writeVarint(value ? 1 : 0);
   }
 
+  /// Writes a bare variable length integer.
+  ///
+  /// The value goes on the wire without a tag: it is the whole body of a
+  /// message that holds a single number, e.g. the answer of a method that
+  /// returns an enum.
+  void writeRawVarint(int value) {
+    _writeVarint(value);
+  }
+
   /// Writes the number of an enum value.
   void writeEnum(int field, int value) {
     _writeTag(field, WireType.varint);

@@ -25,6 +25,7 @@ export 'src/db/postgres.dart';
 export 'src/db/sqlite.dart';
 export 'src/dispatcher.dart';
 export 'src/errors.dart';
+export 'src/grpc.dart';
 export 'src/health.dart';
 export 'src/logger.dart';
 export 'src/middleware.dart';

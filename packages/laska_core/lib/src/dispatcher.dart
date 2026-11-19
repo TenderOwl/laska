@@ -99,6 +99,19 @@ class Dispatcher {
     }
   }
 
+  /// Runs the middleware of [app] and of its groups around [handler].
+  ///
+  /// The gRPC server uses it, so a call that comes over gRPC goes through the
+  /// same middleware as a call that comes over HTTP.
+  Future<Response> runMiddleware(
+    Laska app,
+    Request request,
+    Handler handler,
+  ) async {
+    final context = Context(request, app);
+    return await _runChain(_middlewareOf(app), 0, request, context, handler);
+  }
+
   /// The chain of middleware of the [route], built once and kept.
   ///
   /// The chain is built again when the middleware of the application or of one

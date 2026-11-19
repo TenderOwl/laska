@@ -145,6 +145,19 @@ int httpStatusOfGrpc(int grpcStatus) {
   }
 }
 
+/// Maps an error of the framework to the status of the gRPC protocol.
+///
+/// The mapping goes through the HTTP status, so a service answers the same
+/// problem the same way whatever transport the caller used.
+int grpcStatusOfError(Object error) {
+  if (error is FormatException) {
+    // A payload the framework cannot read is a wrong argument of the caller,
+    // the same way it is over HTTP.
+    return GrpcStatus.invalidArgument;
+  }
+  return grpcStatusOf(httpStatusOfError(error));
+}
+
 /// Maps an error of the framework to the HTTP status it is answered with.
 ///
 /// The mapping is what makes a graceful degradation possible: a call to a

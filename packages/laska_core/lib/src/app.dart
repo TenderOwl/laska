@@ -1,5 +1,6 @@
 import 'db/database.dart';
 import 'dispatcher.dart';
+import 'grpc.dart';
 import 'logger.dart';
 import 'middleware.dart';
 import 'response.dart';
@@ -33,6 +34,18 @@ class Laska {
 
   /// The group this instance belongs to, if any.
   final Laska? parent;
+
+  /// The groups created on this application.
+  ///
+  /// The gRPC server walks the groups, so a service registered on a group is
+  /// served over gRPC as well.
+  final List<Laska> groups = <Laska>[];
+
+  /// The gRPC services registered on the application.
+  ///
+  /// The generated code registers the services of a contract here, so the
+  /// application serves them over gRPC without any extra wiring.
+  late final GrpcServiceRegistry grpc = GrpcServiceRegistry(this);
 
   /// Named middleware, referenced by routes as `middleware: ['auth']`.
   final Map<String, Middleware> aliases = <String, Middleware>{};
@@ -180,6 +193,7 @@ class Laska {
       parent: this,
       middleware: middleware.map(_resolveMiddleware).toList(),
     );
+    groups.add(child);
     callback(child);
   }
 
