@@ -1004,20 +1004,26 @@ class UsersServiceClient {
   );
 
   /// GetUser returns a single user by its identifier.
-  Future<User> getUser(GetUserRequest request, {String? idempotencyKey}) async {
+  ///
+  /// The [headers] are sent with the call, e.g. the token of the caller.
+  ///
+  /// The client writes the `accept` and the `content-type` itself.
+  Future<User> getUser(GetUserRequest request,
+      {String? idempotencyKey, Map<String, String>? headers}) async {
     final uri = _transport.buildUri(
       '/v1/users/${Uri.encodeComponent(request.id.toString())}',
       '/users.v1.UsersService/GetUser',
     );
 
-    final headers = <String, String>{
+    final requestHeaders = <String, String>{
+      ...?headers,
       'accept': _transport.bodyFormat == BodyFormat.protobuf
           ? 'application/protobuf'
           : 'application/json',
     };
 
     if (idempotencyKey != null) {
-      headers['idempotency-key'] = idempotencyKey;
+      requestHeaders['idempotency-key'] = idempotencyKey;
     }
 
     final body = _transport.bodyFormat == BodyFormat.protobuf
@@ -1029,7 +1035,7 @@ class UsersServiceClient {
       'UsersService.GetUser',
       'get',
       uri,
-      headers,
+      requestHeaders,
       body,
     );
 
@@ -1039,8 +1045,12 @@ class UsersServiceClient {
   }
 
   /// ListUsers returns a page of users.
+  ///
+  /// The [headers] are sent with the call, e.g. the token of the caller.
+  ///
+  /// The client writes the `accept` and the `content-type` itself.
   Future<ListUsersResponse> listUsers(ListUsersRequest request,
-      {String? idempotencyKey}) async {
+      {String? idempotencyKey, Map<String, String>? headers}) async {
     final query = <String, String>{};
     query['limit'] = request.limit.toString();
     query['cursor'] = request.cursor.toString();
@@ -1054,14 +1064,15 @@ class UsersServiceClient {
           queryParameters: query.isEmpty ? null : query,
         );
 
-    final headers = <String, String>{
+    final requestHeaders = <String, String>{
+      ...?headers,
       'accept': _transport.bodyFormat == BodyFormat.protobuf
           ? 'application/protobuf'
           : 'application/json',
     };
 
     if (idempotencyKey != null) {
-      headers['idempotency-key'] = idempotencyKey;
+      requestHeaders['idempotency-key'] = idempotencyKey;
     }
 
     final body = _transport.bodyFormat == BodyFormat.protobuf
@@ -1073,7 +1084,7 @@ class UsersServiceClient {
       'UsersService.ListUsers',
       'get',
       uri,
-      headers,
+      requestHeaders,
       body,
     );
 
@@ -1085,14 +1096,19 @@ class UsersServiceClient {
 
   /// CreateUser creates a new user.
   /// The call changes something, so it is never retried.
+  ///
+  /// The [headers] are sent with the call, e.g. the token of the caller.
+  ///
+  /// The client writes the `accept` and the `content-type` itself.
   Future<User> createUser(CreateUserRequest request,
-      {String? idempotencyKey}) async {
+      {String? idempotencyKey, Map<String, String>? headers}) async {
     final uri = _transport.buildUri(
       '/v1/users',
       '/users.v1.UsersService/CreateUser',
     );
 
-    final headers = <String, String>{
+    final requestHeaders = <String, String>{
+      ...?headers,
       'accept': _transport.bodyFormat == BodyFormat.protobuf
           ? 'application/protobuf'
           : 'application/json',
@@ -1101,8 +1117,11 @@ class UsersServiceClient {
           : 'application/json',
     };
 
-    final key = idempotencyKey ?? newIdempotencyKey();
-    headers['idempotency-key'] = key;
+    if (idempotencyKey != null) {
+      requestHeaders['idempotency-key'] = idempotencyKey;
+    } else if (!requestHeaders.containsKey('idempotency-key')) {
+      requestHeaders['idempotency-key'] = newIdempotencyKey();
+    }
 
     final body = _transport.bodyFormat == BodyFormat.protobuf
         ? request.toProtoBytes()
@@ -1113,7 +1132,7 @@ class UsersServiceClient {
       'UsersService.CreateUser',
       'post',
       uri,
-      headers,
+      requestHeaders,
       body,
     );
 

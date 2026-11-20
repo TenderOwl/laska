@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Every method of the generated client takes the headers of the call:
+  `headers: {'authorization': 'Bearer ...'}`. The headers reach the service as
+  the headers of the HTTP call and as the metadata of the gRPC call, so the
+  middleware of the service reads them the same way over both transports. The
+  client writes the `accept` and the `content-type` of the call itself, and
+  the key of the idempotency is the one of the caller: the parameter
+  `idempotencyKey` wins over the header, and the header wins over the key the
+  client generates.
 - The SDK of a contract in Go: `GoGenerator` writes a module of its own that
   holds the messages of the contract, the clients of its services and the
   runtime they need, so a service written in Go depends on nothing but the

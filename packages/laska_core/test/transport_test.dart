@@ -10,12 +10,16 @@ class _EchoService extends grpc.Service {
   /// How many calls the service received.
   int calls = 0;
 
+  /// The metadata of the last call.
+  Map<String, String> metadata = <String, String>{};
+
   _EchoService() {
     $addMethod(
       grpc.ServiceMethod<List<int>, List<int>>(
         'GetUser',
         (grpc.ServiceCall call, Future<List<int>> request) async {
           calls++;
+          metadata = Map<String, String>.of(call.clientMetadata ?? const {});
           final bytes = await request;
           return bytes;
         },
@@ -63,6 +67,40 @@ void main() {
       expect(response.statusCode, 200);
       expect(response.body, <int>[1, 2, 3]);
       expect(service.calls, 1);
+
+      await transport.close();
+    });
+
+    test('sends the headers of the request as the metadata of the call',
+        () async {
+      final transport = GrpcServiceTransport(
+        host: '127.0.0.1',
+        port: server.port!,
+      );
+
+      final response = await transport.send(
+        TransportRequest(
+          method: 'POST',
+          uri: transport.buildUri(
+            '/v1/users/u_1',
+            '/users.v1.UsersService/GetUser',
+          ),
+          headers: <String, String>{
+            'Authorization': 'Bearer the-token',
+            'content-type': 'application/json',
+            'accept': 'application/json',
+          },
+          body: <int>[1, 2, 3],
+        ),
+      );
+
+      expect(response.statusCode, 200);
+      expect(service.metadata['authorization'], 'Bearer the-token');
+
+      // The headers that belong to the protocol are left out: the content
+      // type of a gRPC call is the one of the protocol.
+      expect(service.metadata['content-type'], isNot('application/json'));
+      expect(service.metadata.containsKey('accept'), isFalse);
 
       await transport.close();
     });

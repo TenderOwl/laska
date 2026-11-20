@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The gRPC transport sends the headers of a request as the metadata of the
+  call. The names of the metadata of gRPC are in lower case, so the names of
+  the headers are lower-cased as well, and the headers that belong to the
+  protocol itself — `accept` and `content-type` — are left out: the content
+  type of a gRPC call is the one of the protocol.
 - The files of a directory are served by the runtime: `app.staticFiles(prefix,
   directory)` mounts a directory under a prefix. A file is served with the
   content type of its extension, with the validators of the cache — an `ETag`,

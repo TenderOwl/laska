@@ -96,6 +96,32 @@ void main() {
       expect(code(), contains('throw LaskaApiException('));
     });
 
+    test('generates a client that takes the headers of the call', () {
+      expect(
+        code(),
+        contains('{String? idempotencyKey, Map<String, String>? headers}'),
+      );
+      expect(code(), contains('...?headers,'));
+    });
+
+    test('the client writes the accept and the content type of the call', () {
+      expect(code(), contains("'accept': _transport.bodyFormat"));
+      expect(code(), contains("'content-type': _transport.bodyFormat"));
+    });
+
+    test('the key of the idempotency of the caller wins', () {
+      expect(
+        code(),
+        contains("requestHeaders['idempotency-key'] = idempotencyKey;"),
+      );
+      expect(
+        code(),
+        contains(
+          "requestHeaders['idempotency-key'] = newIdempotencyKey();",
+        ),
+      );
+    });
+
     test('warns about imports that are not part of the contract', () {
       expect(result.warnings.single, contains('google/api/annotations.proto'));
     });

@@ -1795,9 +1795,20 @@ class DartGenerator {
     final idempotent = policy.idempotent ?? false;
 
     _writeDoc(writer, method.comment, null);
+    if (method.comment != null) {
+      writer.write('///');
+    }
+    writer.write(
+      '/// The [headers] are sent with the call, e.g. the token of the caller.',
+    );
+    writer.write('///');
+    writer.write(
+      '/// The client writes the `accept` and the `content-type` itself.',
+    );
     writer.write(
       'Future<${responseType.dartType}> $methodName'
-      '(${requestType.dartType} request, {String? idempotencyKey}) async {',
+      '(${requestType.dartType} request, '
+      '{String? idempotencyKey, Map<String, String>? headers}) async {',
     );
     writer.indent();
 
@@ -1871,8 +1882,9 @@ class DartGenerator {
 
     final verb = rule?.method.toLowerCase() ?? 'post';
 
-    writer.write('final headers = <String, String>{');
+    writer.write('final requestHeaders = <String, String>{');
     writer.indent();
+    writer.write('...?headers,');
     writer.write(
       "'accept': _transport.bodyFormat == BodyFormat.protobuf",
     );
@@ -1893,15 +1905,24 @@ class DartGenerator {
     writer.write('};');
     writer.blank();
 
+    // The key of the idempotency is the one of the caller: the parameter
+    // wins over the header, and the header wins over the generated one.
     if (idempotent) {
       writer.write('if (idempotencyKey != null) {');
       writer.indent();
-      writer.write("headers['idempotency-key'] = idempotencyKey;");
+      writer.write("requestHeaders['idempotency-key'] = idempotencyKey;");
       writer.dedent();
       writer.write('}');
     } else {
-      writer.write('final key = idempotencyKey ?? newIdempotencyKey();');
-      writer.write("headers['idempotency-key'] = key;");
+      writer.write('if (idempotencyKey != null) {');
+      writer.indent();
+      writer.write("requestHeaders['idempotency-key'] = idempotencyKey;");
+      writer.dedent();
+      writer.write(
+        "} else if (!requestHeaders.containsKey('idempotency-key')) {",
+      );
+      writer.write("requestHeaders['idempotency-key'] = newIdempotencyKey();");
+      writer.write('}');
     }
     writer.blank();
 
@@ -1932,7 +1953,7 @@ class DartGenerator {
     writer.write("'${service.name}.${method.name}',");
     writer.write("'$verb',");
     writer.write('uri,');
-    writer.write('headers,');
+    writer.write('requestHeaders,');
     writer.write('body,');
     writer.dedent();
     writer.write(');');

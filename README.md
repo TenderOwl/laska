@@ -156,6 +156,18 @@ final user = await client.getUser(const GetUserRequest(id: 'u_1'));
 print(user.email); // ada@example.com
 ```
 
+A call takes the headers of the caller, so a service that carries the frontend of a workspace
+passes the token of the session to the services it calls:
+
+```dart
+final user = await client.getUser(
+  const GetUserRequest(id: 'u_1'),
+  headers: <String, String>{'authorization': 'Bearer $token'},
+);
+```
+
+The headers reach the service as the headers of the HTTP call and as the metadata of the gRPC call.
+
 The contract is not only a service of Dart: `laska contract sdk --lang=go` writes the SDK of the
 contract in Go — the messages, the clients of the services and the runtime they need — and the SDK
 talks to the service over gRPC:

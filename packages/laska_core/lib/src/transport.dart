@@ -212,6 +212,15 @@ class GrpcServiceTransport implements ServiceTransport {
   /// The metadata sent with every call.
   final Map<String, String> metadata;
 
+  /// The headers that are not sent as the metadata of a gRPC call.
+  ///
+  /// The content type of a gRPC call is the one of the protocol, and the
+  /// accept header of an HTTP call says nothing about a gRPC one.
+  static const Set<String> _headersOfTheProtocol = <String>{
+    'content-type',
+    'accept',
+  };
+
   final grpc.ClientChannel _channel;
 
   int _inFlight = 0;
@@ -245,7 +254,7 @@ class GrpcServiceTransport implements ServiceTransport {
     final call = _channel.createCall<List<int>, List<int>>(
       method,
       Stream<List<int>>.value(request.body ?? const <int>[]),
-      grpc.CallOptions(metadata: metadata),
+      grpc.CallOptions(metadata: _metadataOf(request)),
     );
 
     try {
@@ -263,6 +272,28 @@ class GrpcServiceTransport implements ServiceTransport {
         cause: error,
       );
     }
+  }
+
+  /// The metadata of the call.
+  ///
+  /// The headers of the request are sent as the metadata of the call, so a
+  /// caller that passes the token of a session reaches the service the same
+  /// way it does over HTTP. The names of the metadata of gRPC are in lower
+  /// case, so the names of the headers are lower-cased as well.
+  ///
+  /// The headers that belong to the protocol itself are left out: the content
+  /// type of a gRPC call is the one of the protocol, and the accept header of
+  /// an HTTP call says nothing about a gRPC one.
+  Map<String, String> _metadataOf(TransportRequest request) {
+    final result = <String, String>{...metadata};
+    for (final entry in request.headers.entries) {
+      final key = entry.key.toLowerCase();
+      if (_headersOfTheProtocol.contains(key)) {
+        continue;
+      }
+      result[key] = entry.value;
+    }
+    return result;
   }
 
   /// Closes the transport.

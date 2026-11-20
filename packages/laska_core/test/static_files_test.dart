@@ -45,7 +45,7 @@ void main() {
     }
   });
 
-  File _write(String path, String content) {
+  File writeFile(String path, String content) {
     final file = File('${directory.path}${Platform.pathSeparator}$path');
     file.parent.createSync(recursive: true);
     file.writeAsStringSync(content);
@@ -54,7 +54,7 @@ void main() {
 
   group('Static files', () {
     test('serves a file of the directory', () async {
-      _write('app.js', 'console.log(1);');
+      writeFile('app.js', 'console.log(1);');
       final app = Laska();
       app.staticFiles('/assets', directory.path);
 
@@ -68,7 +68,7 @@ void main() {
     });
 
     test('serves a file of a subdirectory', () async {
-      _write('css/main.css', 'body {}');
+      writeFile('css/main.css', 'body {}');
       final app = Laska();
       app.staticFiles('/assets', directory.path);
 
@@ -81,7 +81,7 @@ void main() {
     });
 
     test('serves the files of the root of the application', () async {
-      _write('index.html', '<h1>Laska</h1>');
+      writeFile('index.html', '<h1>Laska</h1>');
       final app = Laska();
       app.staticFiles('/', directory.path);
 
@@ -93,7 +93,7 @@ void main() {
     });
 
     test('serves the files of a group', () async {
-      _write('app.js', 'console.log(1);');
+      writeFile('app.js', 'console.log(1);');
       final app = Laska();
       app.group('/admin', (group) {
         group.staticFiles('/assets', directory.path);
@@ -108,7 +108,7 @@ void main() {
 
     test('serves the index file when the request points at a directory',
         () async {
-      _write('index.html', '<h1>Laska</h1>');
+      writeFile('index.html', '<h1>Laska</h1>');
       final app = Laska();
       app.staticFiles('/assets', directory.path);
 
@@ -134,7 +134,7 @@ void main() {
     });
 
     test('serves the fallback file when the file is missing', () async {
-      _write('index.html', '<h1>Laska</h1>');
+      writeFile('index.html', '<h1>Laska</h1>');
       final app = Laska();
       app.staticFiles('/assets', directory.path, fallback: 'index.html');
 
@@ -147,7 +147,7 @@ void main() {
     });
 
     test('refuses a path that points outside of the directory', () async {
-      _write('secret.txt', 'secret');
+      writeFile('secret.txt', 'secret');
       final app = Laska();
       app.staticFiles('/assets', directory.path);
 
@@ -159,7 +159,7 @@ void main() {
 
     test('refuses an encoded path that points outside of the directory',
         () async {
-      _write('secret.txt', 'secret');
+      writeFile('secret.txt', 'secret');
       final app = Laska();
       app.staticFiles('/assets', directory.path);
 
@@ -170,7 +170,7 @@ void main() {
     });
 
     test('decodes the path of the file', () async {
-      _write('my file.txt', 'hello');
+      writeFile('my file.txt', 'hello');
       final app = Laska();
       app.staticFiles('/assets', directory.path);
 
@@ -182,7 +182,7 @@ void main() {
     });
 
     test('decodes a path of a file with a non-latin name', () async {
-      _write('привет.txt', 'hello');
+      writeFile('привет.txt', 'hello');
       final app = Laska();
       app.staticFiles('/assets', directory.path);
 
@@ -206,7 +206,7 @@ void main() {
     });
 
     test('serves a file of an unknown extension as a binary one', () async {
-      _write('data.bin', 'binary');
+      writeFile('data.bin', 'binary');
       final app = Laska();
       app.staticFiles('/assets', directory.path);
 
@@ -218,7 +218,7 @@ void main() {
     });
 
     test('writes the validators of the cache', () async {
-      _write('app.js', 'console.log(1);');
+      writeFile('app.js', 'console.log(1);');
       final app = Laska();
       app.staticFiles('/assets', directory.path);
 
@@ -231,7 +231,7 @@ void main() {
     });
 
     test('writes the cache control when the age is given', () async {
-      _write('app.js', 'console.log(1);');
+      writeFile('app.js', 'console.log(1);');
       final app = Laska();
       app.staticFiles(
         '/assets',
@@ -246,7 +246,7 @@ void main() {
     });
 
     test('answers 304 when the client holds the file', () async {
-      _write('app.js', 'console.log(1);');
+      writeFile('app.js', 'console.log(1);');
       final app = Laska();
       app.staticFiles('/assets', directory.path);
 
@@ -266,7 +266,7 @@ void main() {
     });
 
     test('answers 304 when the file was not changed since', () async {
-      _write('app.js', 'console.log(1);');
+      writeFile('app.js', 'console.log(1);');
       final app = Laska();
       app.staticFiles('/assets', directory.path);
 
@@ -285,7 +285,7 @@ void main() {
     });
 
     test('serves the file when the validator of the client is old', () async {
-      _write('app.js', 'console.log(1);');
+      writeFile('app.js', 'console.log(1);');
       final app = Laska();
       app.staticFiles('/assets', directory.path);
 
@@ -300,7 +300,7 @@ void main() {
     });
 
     test('answers a HEAD request without a body', () async {
-      _write('app.js', 'console.log(1);');
+      writeFile('app.js', 'console.log(1);');
       final app = Laska();
       app.staticFiles('/assets', directory.path);
 
@@ -315,7 +315,7 @@ void main() {
     });
 
     test('does not shadow a route that is more specific', () async {
-      _write('api', 'the file');
+      writeFile('api', 'the file');
       final app = Laska();
       app.staticFiles('/assets', directory.path);
       app.get('/assets/api', (ctx) => ctx.text('the route'));
@@ -328,7 +328,7 @@ void main() {
     });
 
     test('writes the extra headers of the registration', () async {
-      _write('app.js', 'console.log(1);');
+      writeFile('app.js', 'console.log(1);');
       final app = Laska();
       app.staticFiles(
         '/assets',
@@ -378,7 +378,7 @@ void main() {
     late HttpServer server;
 
     setUp(() async {
-      _write('app.js', 'console.log(1);');
+      writeFile('app.js', 'console.log(1);');
       final app = Laska();
       app.staticFiles('/assets', directory.path);
       server = await serve(app, port: 0);

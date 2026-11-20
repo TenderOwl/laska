@@ -323,6 +323,32 @@ final client = UsersServiceClient(
 The binary codec is pure Dart, so a contract keeps its wire format without
 `protoc` on the machine of the service.
 
+## The headers of a call
+
+Every method of the generated client takes the headers of the call:
+
+```dart
+final user = await client.getUser(
+  const GetUserRequest(id: 'u_1'),
+  headers: <String, String>{'authorization': 'Bearer $token'},
+);
+```
+
+The headers reach the service the same way over both transports: they are the
+headers of the HTTP call, and the metadata of the gRPC call. The middleware of
+the service reads them as the headers of the request, so the middleware of the
+authentication reads the token of the caller the same way over HTTP and over
+gRPC.
+
+This is what a frontend of a workspace needs: the browser holds the token of
+the session, the service that carries the frontend passes it to the services
+of the workspace, and their middleware checks it.
+
+Two headers belong to the call itself, and the client writes them: `accept`
+and `content-type` follow the format of the transport. The key of the
+idempotency is the one of the caller as well: the parameter `idempotencyKey`
+wins over the header, and the header wins over the key the client generates.
+
 ## The gRPC server
 
 A service of a contract answers over HTTP and over gRPC, and one

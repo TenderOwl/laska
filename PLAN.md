@@ -551,9 +551,9 @@ The boundary is drawn on purpose:
 
 So Laska is not a "mini-Django": it does not become the framework of the frontend, it stays the
 runtime of the service that carries the frontend. The whole of the track is three steps: the
-runtime (done), the headers of a call in the generated client (so the frontend passes the token of
-the session), and the scaffold `laska new app` with the kind `app` in the manifest of the
-workspace.
+runtime (done), the headers of a call in the generated client (done — the headers reach the
+service as the headers of the HTTP call and as the metadata of the gRPC call), and the scaffold
+`laska new app` with the kind `app` in the manifest of the workspace.
 
 ---
 
@@ -588,7 +588,9 @@ workspace.
   store and its middleware, the static `ServiceDiscovery`, the `Outbox` and its dispatcher, and
   the error taxonomy with the HTTP ↔ gRPC status mapping.
 - Transports: `ServiceTransport` with the HTTP (JSON) and the gRPC (protobuf) implementations,
-  the pure-Dart protobuf codec (`ProtoWriter`/`ProtoReader`) and the `Request.idempotencyKey`.
+  the pure-Dart protobuf codec (`ProtoWriter`/`ProtoReader`) and the `Request.idempotencyKey`. The
+  gRPC transport sends the headers of a request as the metadata of the call, so the middleware of
+  the service reads them the same way over both transports.
 
 *Planned:*
 
@@ -600,6 +602,8 @@ workspace.
 
 - Contract compilation with a managed, cached `protoc`.
 - Dart codegen: messages, service interfaces, REST route registration, typed clients, DI wiring.
+  The client takes the headers of the call (`headers:`), so the caller passes the token of the
+  session to the service it talks to.
 - Foreign-language SDK generation by orchestrating upstream protoc plugins
   (`--lang=go`, `--lang=php`, `--lang=python`, `--lang=ts`).
 - OpenAPI 3.1 export from the same contract, served at `/api-docs` in dev and exportable as a
@@ -921,10 +925,10 @@ service, and the release hardening closed the gaps a v1.0 cannot have.
    projection. What is left is the reflection of the server, so a tool of the ecosystem discovers
    the methods of a running service.
 4. **The frontend of the workspace** — a service may carry the frontend of the workspace, and the
-   runtime serves the files of a directory and answers with HTML (§4.14). The runtime is done; the
-   headers of a call in the generated Dart client come next (so the frontend passes the token of
-   the session), and then the scaffold `laska new app` with the kind `app` in the manifest of the
-   workspace.
+   runtime serves the files of a directory and answers with HTML (§4.14). The runtime is done, and
+   the headers of a call in the generated Dart client are done as well, so the service that carries
+   the frontend passes the token of the session to the services it calls. What is left is the
+   scaffold `laska new app` with the kind `app` in the manifest of the workspace.
 
 Deferred to v1.1: the `@injectable` codegen, the ORM adapters and the Redis and NATS backends.
 

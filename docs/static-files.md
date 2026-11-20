@@ -128,9 +128,20 @@ app.staticFiles('/', 'web/dist', fallback: 'index.html');
 
 app.get('/api/me', (ctx) async {
   final client = UsersClient(baseUrl: Config.string('USERS_URL')!);
-  return ctx.json(await client.getUser(ctx.params['id']!));
+  return ctx.json(
+    await client.getUser(
+      const GetUserRequest(id: 'u_1'),
+      headers: <String, String>{
+        'authorization': ctx.header('authorization') ?? '',
+      },
+    ),
+  );
 });
 ```
+
+The token of the browser travels with the call: the service that carries the
+frontend passes it to the service it calls, and the middleware of that service
+checks it. The guide of the contracts tells more about the headers of a call.
 
 The framework does not build the frontend and does not watch it: the build of
 the application belongs to the application, e.g. `npm run build` in the

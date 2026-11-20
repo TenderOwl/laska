@@ -1,5 +1,21 @@
 ## Unreleased
 
+- **A call takes the headers of the caller.** The generated client passes the
+  headers of a call to the service it talks to, so a service that carries the
+  frontend of a workspace passes the token of the session to the services it
+  calls.
+  - Every method of the generated client takes a `headers` parameter:
+    `client.getUser(request, headers: {'authorization': 'Bearer ...'})`.
+  - The headers reach the service the same way over both transports: they are
+    the headers of the HTTP call, and the metadata of the gRPC call. The
+    middleware of the service reads them as the headers of the request, so the
+    middleware of the authentication checks the token the same way over HTTP
+    and over gRPC.
+  - The client writes the `accept` and the `content-type` of the call itself,
+    and the key of the idempotency is the one of the caller: the parameter
+    `idempotencyKey` wins over the header, and the header wins over the key
+    the client generates.
+
 - **A service serves the files and the HTML of the frontend.** A workspace does
   not hold only APIs: a service may carry the frontend of the workspace — a
   landing page, an admin panel — and the runtime serves the files of a
