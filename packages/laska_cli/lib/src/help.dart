@@ -137,15 +137,19 @@ const Map<String, CommandHelp> commandHelp = <String, CommandHelp>{
     ],
   ),
   'new': CommandHelp(
-    summary: 'Scaffold a service or a workspace.',
+    summary: 'Scaffold a service, an app or a workspace.',
     description:
         'Writes a service that is ready to run: the contract, the generated '
         'code, the implementation, the entrypoint and a test. The service is '
         'added to the manifest of the workspace. With a name instead of the '
-        'word "service", a whole workspace with a first service is written.',
+        'word "service", a whole workspace with a first service is written. '
+        'With the word "app", an app is written: it serves the frontend of the '
+        'workspace and calls the services behind it.',
     examples: <String>[
       'laska new service users',
       'laska new service users --port 8081',
+      'laska new app admin',
+      'laska new app admin --calls users',
       'laska new shop',
     ],
   ),

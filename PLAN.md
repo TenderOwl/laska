@@ -550,10 +550,11 @@ The boundary is drawn on purpose:
   of the workspace, and the frontend holds the token of it.
 
 So Laska is not a "mini-Django": it does not become the framework of the frontend, it stays the
-runtime of the service that carries the frontend. The whole of the track is three steps: the
-runtime (done), the headers of a call in the generated client (done — the headers reach the
-service as the headers of the HTTP call and as the metadata of the gRPC call), and the scaffold
-`laska new app` with the kind `app` in the manifest of the workspace.
+runtime of the service that carries the frontend. The whole of the track is three steps, and they
+are done: the runtime (the files and the HTML), the headers of a call in the generated client (the
+headers reach the service as the headers of the HTTP call and as the metadata of the gRPC call), and
+the app of the workspace (`laska new app`, the kind `app` in the manifest and the image that holds
+the frontend).
 
 ---
 
@@ -616,6 +617,7 @@ service as the headers of the HTTP call and as the metadata of the gRPC call), a
 ```
 laska new <name>          # scaffold a project                               [done]
 laska new service <name>  # scaffold a service inside a workspace             [done]
+laska new app <name>      # scaffold an app that carries the frontend         [done]
 laska serve [--workers=N] # run the HTTP server (supervisor)          [done]
 laska dev                 # run all services of a workspace + local infra + aggregated logs
 laska contract compile    # compile contracts, generate code         [done]
@@ -638,9 +640,11 @@ wires them to a local Postgres/Redis (via a generated compose file), aggregates 
 shows live traces — the "one command instead of five tools" promise in practice.
 
 `laska new` writes a service that runs: the contract, the generated code, the implementation, the
-entrypoint and a test, and it adds the service to the manifest of the workspace. `laska deploy:*`
-writes the images and the manifests of the cluster from that manifest, and `laska ci:recipe` writes
-the workflow of the pipeline, so the artefacts of a project are never written by hand.
+entrypoint and a test, and it adds the service to the manifest of the workspace. `laska new app`
+writes the app of the workspace (§4.14): it serves the files of the frontend and calls the services
+behind it. `laska deploy:*` writes the images and the manifests of the cluster from that manifest,
+and `laska ci:recipe` writes the workflow of the pipeline, so the artefacts of a project are never
+written by hand.
 
 Every command has a help: `laska --help` lists the commands, the global options and the
 environment variables of the telemetry, `laska help <command>` describes one command with its
@@ -925,10 +929,10 @@ service, and the release hardening closed the gaps a v1.0 cannot have.
    projection. What is left is the reflection of the server, so a tool of the ecosystem discovers
    the methods of a running service.
 4. **The frontend of the workspace** — a service may carry the frontend of the workspace, and the
-   runtime serves the files of a directory and answers with HTML (§4.14). The runtime is done, and
-   the headers of a call in the generated Dart client are done as well, so the service that carries
-   the frontend passes the token of the session to the services it calls. What is left is the
-   scaffold `laska new app` with the kind `app` in the manifest of the workspace.
+   runtime serves the files of a directory and answers with HTML (§4.14). The runtime is done, the
+   headers of a call in the generated Dart client are done, and the app of the workspace is done:
+   `laska new app` writes it, the manifest holds the kind `app`, and the image of the app holds
+   the files of the frontend. The guide is `docs/frontend.md`.
 
 Deferred to v1.1: the `@injectable` codegen, the ORM adapters and the Redis and NATS backends.
 

@@ -6,3 +6,8 @@ services:
     entrypoint: services/shop_gateway/bin/server.dart
     port: 8081
     depends_on: [shop]
+  - name: admin
+    kind: app
+    entrypoint: apps/admin/bin/server.dart
+    port: 8082
+    depends_on: [shop_gateway]

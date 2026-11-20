@@ -13,7 +13,7 @@ $ dart run tool/check.dart
 | [contract_slice](../example/contract_slice) | The vertical slice: a contract, the generated code, the service and the client. |
 | [auth_service](../example/auth_service) | The authentication of the callers: the tokens, the scopes, the API keys, the sessions and the limits. |
 | [database_service](../example/database_service) | The data layer: the migrations, the repository, the transactions and the readiness of the service. |
-| [workspace](../example/workspace) | A workspace of two services: the service that keeps the records and the one that calls it. |
+| [workspace](../example/workspace) | A workspace of two services and an app: the service that keeps the records, the one that calls it and the app that carries the frontend. |
 
 ## Run an example
 
@@ -97,24 +97,31 @@ ledger never disagree: when a write fails, the others are rolled back. The
 service registers its database, so the readiness probe asks it whether the
 service is able to serve traffic.
 
-## A workspace of two services
+## A workspace of two services and an app
 
-`example/workspace` holds the two services and the manifest that ties them
-together. Its files are exactly the files that `laska new shop` writes, so the
-example is the proof that the command gives a project that runs.
+`example/workspace` holds the two services, the app and the manifest that ties
+them together. The files of the services are exactly the files that
+`laska new shop` writes, and the app is the file that `laska new app` writes, so
+the example is the proof that the commands give a project that runs.
 
 ```console
 $ cd example/workspace
 $ dart run laska_cli:laska dev
 ```
 
-The command starts the services in the order of their dependencies: the gateway
-waits for the service behind it to answer, and every service gets the address
-of the others in its environment. The gateway calls the service behind it
-through the client of its contract, so the call carries the policy of the
-contract — the timeout, the retries, the circuit breaker — and the trace of the
-request: the two services answer with one trace.
+The command starts the participants in the order of their dependencies: the gateway
+waits for the service behind it to answer, the app waits for the gateway, and
+every participant gets the address of the others in its environment. The gateway
+calls the service behind it through the client of its contract, so the call
+carries the policy of the contract — the timeout, the retries, the circuit
+breaker — and the trace of the request: the two services answer with one trace.
+
+The app serves the files of the frontend and calls the gateway through the
+client of its contract. It passes the headers of the caller to the service
+behind it, so the token of the session of the browser reaches the gateway.
 
 The test of the gateway starts both services and checks that the gateway answers
 with the record of the service behind it, that a record that is not there is a
-`404`, and that the two services belong to one trace.
+`404`, and that the two services belong to one trace. The test of the app
+checks that it serves the frontend and that it forwards the call to the service
+behind it.

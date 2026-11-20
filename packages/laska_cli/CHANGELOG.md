@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- `laska new app <name>` writes the app of a workspace: the service that
+  carries the frontend. It serves the files of the frontend, it calls the
+  services behind it through the typed clients of their contracts and it comes
+  with a test. The option `--calls` narrows the services it calls down, and it
+  may be repeated.
+- The manifest of a workspace holds the kind of a participant: `kind: app` for
+  an app. A service of a contract keeps no kind, so the manifest of a workspace
+  of services stays the manifest it was. A kind nobody knows is refused.
+- The image of an app holds the files of the frontend, because the app serves
+  them, and the variable `LASKA_WEB_ROOT` points at them.
 - `laska contract sdk --lang=go` writes the SDK of a contract in Go: the
   messages of the contract, the clients of its services and the runtime they
   need. The SDK is a module of its own, and the path of the module is given

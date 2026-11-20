@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:args/args.dart';
+import 'package:laska_cli/src/app_scaffold.dart';
 import 'package:laska_cli/src/ci.dart';
 import 'package:laska_cli/src/collector.dart';
 import 'package:laska_cli/src/deploy.dart';
@@ -746,11 +747,12 @@ class _Cli {
     }
   }
 
-  /// Scaffolds a service or a workspace.
+  /// Scaffolds a service, an app or a workspace.
   ///
   /// `laska new service <name>` writes a service in the current directory and
-  /// adds it to the manifest of the workspace. `laska new <name>` writes a
-  /// whole workspace with a first service in it.
+  /// adds it to the manifest of the workspace. `laska new app <name>` writes an
+  /// app: it serves the frontend of the workspace and calls the services behind
+  /// it. `laska new <name>` writes a whole workspace with a first service in it.
   Future<void> _new(ArgResults command, LaskaHelp help) async {
     final arguments = command.rest;
     if (arguments.isEmpty) {
@@ -761,7 +763,8 @@ class _Cli {
     }
 
     final isService = arguments.first == 'service';
-    final name = isService
+    final isApp = arguments.first == 'app';
+    final name = isService || isApp
         ? (arguments.length > 1 ? arguments[1] : '')
         : arguments.first;
 
@@ -789,6 +792,11 @@ class _Cli {
     }
 
     try {
+      if (isApp) {
+        await _newApp(command, localWorkspace);
+        return;
+      }
+
       if (isService) {
         final snake = snakeCase(name);
         final directory = Directory('$output/$snake');
@@ -843,6 +851,97 @@ class _Cli {
       err.writeln(error.toString());
       code = 65;
     }
+  }
+
+  /// Scaffolds an app and adds it to the manifest of the workspace.
+  ///
+  /// The app serves the frontend of the workspace and calls the services
+  /// behind it. The services it calls are the ones named with `--calls`, or
+  /// every service of the manifest when the option is not given.
+  ///
+  /// The port of the app is the first port no service of the workspace listens
+  /// to, so the workspace starts without a clash. The option `--port` wins over
+  /// it.
+  Future<void> _newApp(ArgResults command, String? localWorkspace) async {
+    final name = command.rest.length > 1 ? command.rest[1] : '';
+    final snake = snakeCase(name);
+    final output = command.option('out')!;
+    final directory = Directory('$output/$snake');
+
+    final manifest = File(command.option('manifest')!);
+    final workspace = manifest.existsSync()
+        ? readWorkspace(manifest)
+        : const Workspace(services: <WorkspaceService>[]);
+
+    final wanted = command.multiOption('calls');
+    final called = <WorkspaceService>[];
+    if (wanted.isEmpty) {
+      for (final service in workspace.services) {
+        if (service.kind == WorkspaceServiceKind.service) {
+          called.add(service);
+        }
+      }
+    } else {
+      for (final wanted in wanted) {
+        final service = workspace.service(wanted);
+        if (service == null) {
+          err.writeln(
+            'The manifest "${manifest.path}" holds no service called "$wanted".',
+          );
+          code = 65;
+          return;
+        }
+        called.add(service);
+      }
+    }
+
+    final dependencies = <AppDependency>[];
+    for (final service in called) {
+      dependencies.add(readAppDependency(service, manifest.parent));
+    }
+
+    final port = command.wasParsed('port')
+        ? int.tryParse(command.option('port') ?? '') ?? 8080
+        : _freePort(workspace);
+
+    final result = await scaffoldApp(
+      name,
+      directory: directory,
+      port: port,
+      localWorkspace: localWorkspace,
+      dependencies: dependencies,
+    );
+
+    await addServiceToManifest(
+      manifest,
+      WorkspaceService(
+        name: snake,
+        kind: WorkspaceServiceKind.app,
+        entrypoint: relativePath(
+          manifest.parent.absolute.path,
+          '${directory.absolute.path}/bin/server.dart',
+        ),
+        port: port,
+        dependsOn: <String>[for (final service in called) service.name],
+      ),
+    );
+
+    for (final path in result.written) {
+      out.writeln('created: $path');
+    }
+    out.writeln('created: ${manifest.path}');
+    out.writeln();
+    out.writeln('Run it with: laska dev');
+  }
+
+  /// The first port no service of the [workspace] listens to.
+  int _freePort(Workspace workspace) {
+    final used = workspace.services.map((service) => service.port).toSet();
+    var port = 8080;
+    while (used.contains(port)) {
+      port++;
+    }
+    return port;
   }
 
   /// Runs the workspace in development.

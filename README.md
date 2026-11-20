@@ -342,6 +342,7 @@ final users = discovery.resolve('users'); // http://127.0.0.1:8080
 ```
 laska new <name>          # scaffold a workspace with two services
 laska new service <name>  # scaffold a service inside a workspace
+laska new app <name>      # scaffold an app that carries the frontend [--calls <service>]
 laska contract compile   --proto <dir> --out <dir> [--title <t>] [--version <v>]
 laska contract diff      --base <dir> --candidate <dir> [--quiet]
 laska contract lint      --proto <dir>
@@ -363,11 +364,13 @@ prints the route table of the service, and `laska migrate:run` applies the pendi
 
 `laska new service` writes a service that runs: the contract, the generated code, the
 implementation, the entrypoint and a test, and it adds the service to the manifest of the
-workspace. `laska new <name>` writes a whole workspace with two services: the first one keeps the
-records and the second one calls it through the typed client of its contract, so the project shows
-the whole path of the framework. `laska deploy:dockerfile` and `laska deploy:k8s` write the images
-and the manifests of the cluster from that manifest, and `laska ci:recipe` writes the workflow of
-the pipeline.
+workspace. `laska new app` writes the app of a workspace: it serves the files of the frontend and
+calls the services behind it through the typed clients of their contracts, so the browser talks to
+the app and not to the services. `laska new <name>` writes a whole workspace with two services: the
+first one keeps the records and the second one calls it through the typed client of its contract, so
+the project shows the whole path of the framework. `laska deploy:dockerfile` and `laska deploy:k8s`
+write the images and the manifests of the cluster from that manifest, and `laska ci:recipe` writes
+the workflow of the pipeline.
 
 `laska contract matrix` compares every version of a contract with every other one and tells which
 client works against which server. `laska keys generate` writes the keys that sign the tokens of the
@@ -564,10 +567,12 @@ proof is missing.
 plain SQL, a repository that owns the queries, and a transfer that moves money in one
 transaction, so the balances and the ledger never disagree.
 
-`example/workspace` holds the two services and the manifest that ties them together — the files
-are exactly the files that `laska new shop` writes. The second service calls the first one
-through the client of its contract, so the call carries the policy of the contract and the trace
-of the request: the two services answer with one trace.
+`example/workspace` holds the two services, the app and the manifest that ties them together — the
+files of the services are exactly the files that `laska new shop` writes, and the app is the file that
+`laska new app` writes. The second service calls the first one through the client of its contract,
+so the call carries the policy of the contract and the trace of the request: the two services answer
+with one trace. The app serves the frontend and calls the gateway, passing the headers of the caller
+to it.
 
 The guide of the examples is [docs/examples.md](docs/examples.md).
 

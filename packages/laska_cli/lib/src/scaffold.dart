@@ -719,11 +719,11 @@ String _pubspec({
 
   if (localWorkspace != null && directory != null) {
     overrides['laska_core'] =
-        _pathDependency(localWorkspace, 'laska_core', directory);
+        pathDependency(localWorkspace, 'laska_core', directory);
     overrides['laska_contracts'] =
-        _pathDependency(localWorkspace, 'laska_contracts', directory);
+        pathDependency(localWorkspace, 'laska_contracts', directory);
     overrides['laska_test'] =
-        _pathDependency(localWorkspace, 'laska_test', directory);
+        pathDependency(localWorkspace, 'laska_test', directory);
   }
 
   final dependencies = <String, String>{
@@ -773,7 +773,7 @@ String _pubspec({
 }
 
 /// The dependency on a package of the local workspace.
-String _pathDependency(
+String pathDependency(
   String workspace,
   String package,
   Directory directory,

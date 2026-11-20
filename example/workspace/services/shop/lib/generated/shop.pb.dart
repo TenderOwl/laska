@@ -13,7 +13,9 @@ import 'package:laska_core/laska_core.dart';
 /// Request of the GetShop method.
 class GetShopRequest {
   /// Creates a GetShopRequest.
-  const GetShopRequest({required this.id});
+  const GetShopRequest({
+    required this.id,
+  });
 
   /// Stable identifier of the record.
   final String id;
@@ -24,11 +26,15 @@ class GetShopRequest {
     if (id is! String) {
       throw const FormatException('GetShopRequest.id must be of type String');
     }
-    return GetShopRequest(id: id);
+    return GetShopRequest(
+      id: id,
+    );
   }
 
   /// The JSON representation of the GetShopRequest.
-  Map<String, dynamic> toJson() => <String, dynamic>{'id': id};
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+      };
 
   /// The bytes of the message in the wire format of the protocol buffers.
   List<int> toProtoBytes() {
@@ -54,14 +60,19 @@ class GetShopRequest {
       }
     }
 
-    return GetShopRequest(id: id);
+    return GetShopRequest(
+      id: id,
+    );
   }
 }
 
 /// A record of the application.
 class Shop {
   /// Creates a Shop.
-  const Shop({required this.id, required this.name});
+  const Shop({
+    required this.id,
+    required this.name,
+  });
 
   /// Stable identifier of the record.
   final String id;
@@ -79,11 +90,17 @@ class Shop {
     if (name is! String) {
       throw const FormatException('Shop.name must be of type String');
     }
-    return Shop(id: id, name: name);
+    return Shop(
+      id: id,
+      name: name,
+    );
   }
 
   /// The JSON representation of the Shop.
-  Map<String, dynamic> toJson() => <String, dynamic>{'id': id, 'name': name};
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'id': id,
+        'name': name,
+      };
 
   /// The bytes of the message in the wire format of the protocol buffers.
   List<int> toProtoBytes() {
@@ -115,7 +132,10 @@ class Shop {
       }
     }
 
-    return Shop(id: id, name: name);
+    return Shop(
+      id: id,
+      name: name,
+    );
   }
 }
 
@@ -127,19 +147,43 @@ abstract class ShopService {
   Future<Shop> getShop(GetShopRequest request);
 }
 
-/// Registers the REST projection of [service] on [app].
+/// Registers the projections of [service] on [app].
+///
+/// The service is registered over HTTP and over gRPC, so the
+/// contract of the service is served on both transports.
 void registerShopService(
   Laska app,
   ShopService service, {
   List<Middleware> middleware = const <Middleware>[],
+  bool grpc = true,
 }) {
-  app.get('/v1/shop/:id', (ctx) async {
-    final payload = <String, dynamic>{};
-    payload['id'] = ctx.params['id']!;
-    final request = GetShopRequest.fromJson(payload);
-    final response = await service.getShop(request);
-    return ctx.json(response.toJson());
-  }, middleware: middleware);
+  app.get(
+    '/v1/shop/:id',
+    (ctx) async {
+      final payload = <String, dynamic>{};
+      payload['id'] = ctx.params['id']!;
+      final request = GetShopRequest.fromJson(payload);
+      final response = await service.getShop(request);
+      return ctx.json(response.toJson());
+    },
+    middleware: middleware,
+  );
+
+  if (grpc) {
+    app.grpc.add(
+      GrpcService(
+        name: 'shop.v1.ShopService',
+        methods: <String, GrpcHandler>{
+          'GetShop': (bytes) async {
+            final request = GetShopRequest.fromProtoBytes(bytes);
+            final response = await service.getShop(request);
+            return response.toProtoBytes();
+          },
+        },
+        middleware: middleware,
+      ),
+    );
+  }
 }
 
 /// The policies of the methods of the `ShopService` service.
@@ -152,19 +196,19 @@ class ShopServicePolicies {
 
   /// The policy of the `GetShop` method.
   static final DependencyPolicy getShop = DependencyPolicy(
-    timeout: Duration(seconds: 2),
-    retry: RetryPolicy(
-      maxAttempts: 3,
-      initialBackoff: Duration(milliseconds: 100),
-      maxBackoff: Duration(seconds: 2),
-      jitter: true,
-    ),
-    idempotent: true,
-  );
+      timeout: Duration(seconds: 2),
+      retry: RetryPolicy(
+          maxAttempts: 3,
+          initialBackoff: Duration(milliseconds: 100),
+          maxBackoff: Duration(seconds: 2),
+          jitter: true),
+      idempotent: true);
 
   /// The policies of the methods, by the name of the method.
   static final Map<String, DependencyPolicy> policies =
-      <String, DependencyPolicy>{'GetShop': getShop};
+      <String, DependencyPolicy>{
+    'GetShop': getShop,
+  };
 }
 
 /// Typed client for the `ShopService` service.
@@ -231,26 +275,38 @@ class ShopServiceClient {
   );
 
   /// GetShop returns a single record by its identifier.
-  Future<Shop> getShop(GetShopRequest request, {String? idempotencyKey}) async {
+  ///
+  /// The [headers] are sent with the call, e.g. the token of the caller.
+  ///
+  /// The client writes the `accept` and the `content-type` itself.
+  Future<Shop> getShop(GetShopRequest request,
+      {String? idempotencyKey, Map<String, String>? headers}) async {
     final uri = _transport.buildUri(
       '/v1/shop/${Uri.encodeComponent(request.id.toString())}',
       '/shop.v1.ShopService/GetShop',
     );
 
-    final headers = <String, String>{'accept': 'application/json'};
+    final requestHeaders = <String, String>{
+      ...?headers,
+      'accept': _transport.bodyFormat == BodyFormat.protobuf
+          ? 'application/protobuf'
+          : 'application/json',
+    };
 
     if (idempotencyKey != null) {
-      headers['idempotency-key'] = idempotencyKey;
+      requestHeaders['idempotency-key'] = idempotencyKey;
     }
 
-    final body = null;
+    final body = _transport.bodyFormat == BodyFormat.protobuf
+        ? request.toProtoBytes()
+        : null;
 
     final response = await _send(
       'GetShop',
       'ShopService.GetShop',
       'get',
       uri,
-      headers,
+      requestHeaders,
       body,
     );
 
@@ -274,7 +330,9 @@ class ShopServiceClient {
     final methodPolicy = _policies[method];
     final effectivePolicy = methodPolicy == null
         ? DependencyPolicy(timeout: _timeout)
-        : methodPolicy.copyWith(timeout: methodPolicy.timeout ?? _timeout);
+        : methodPolicy.copyWith(
+            timeout: methodPolicy.timeout ?? _timeout,
+          );
     try {
       return await _dependency.call(
         TransportRequest(

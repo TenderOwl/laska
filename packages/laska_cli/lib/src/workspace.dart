@@ -26,6 +26,37 @@ import 'dart:io';
 
 import 'yaml.dart';
 
+/// The kind of a service of the workspace.
+///
+/// The kind tells what the participant of the workspace is: a service of a
+/// contract or an application that carries the frontend of the workspace.
+enum WorkspaceServiceKind {
+  /// A service of a contract.
+  ///
+  /// It answers over the REST projection of its contract and over gRPC, and
+  /// it is called by the other services of the workspace.
+  service,
+
+  /// An application that carries the frontend of the workspace.
+  ///
+  /// It serves the files of the frontend and calls the services behind it, so
+  /// the browser of the user talks to the application and not to the services.
+  app;
+
+  /// The name of the kind in the manifest, e.g. `app`.
+  String get label => name;
+
+  /// The kind of the [name], or `null` when the name is not a kind.
+  static WorkspaceServiceKind? byName(String name) {
+    for (final kind in WorkspaceServiceKind.values) {
+      if (kind.label == name) {
+        return kind;
+      }
+    }
+    return null;
+  }
+}
+
 /// A service of the workspace.
 class WorkspaceService {
   /// Creates a service.
@@ -33,12 +64,16 @@ class WorkspaceService {
     required this.name,
     required this.entrypoint,
     required this.port,
+    this.kind = WorkspaceServiceKind.service,
     this.environment = const <String, String>{},
     this.dependsOn = const <String>[],
   });
 
   /// The name of the service, used as the prefix of its logs.
   final String name;
+
+  /// The kind of the service, e.g. an application of the frontend.
+  final WorkspaceServiceKind kind;
 
   /// The Dart file the service runs.
   final String entrypoint;
@@ -160,6 +195,7 @@ Workspace readWorkspace(File file) {
         name: name,
         entrypoint: entrypoint,
         port: int.tryParse('${raw['port'] ?? ''}') ?? 8080,
+        kind: _kindOf(raw['kind'], name),
         environment: _stringMap(raw['environment']),
         dependsOn: _stringList(raw['depends_on']),
       ),
@@ -197,6 +233,11 @@ String renderWorkspace(Workspace workspace) {
   buffer.writeln('services:');
   for (final service in workspace.services) {
     buffer.writeln('  - name: ${service.name}');
+    // The kind is written when it is not the default, so the manifest of a
+    // workspace of services stays the manifest it was.
+    if (service.kind != WorkspaceServiceKind.service) {
+      buffer.writeln('    kind: ${service.kind.label}');
+    }
     buffer.writeln('    entrypoint: ${service.entrypoint}');
     buffer.writeln('    port: ${service.port}');
     if (service.dependsOn.isNotEmpty) {
@@ -382,6 +423,26 @@ Future<bool> waitForPort(
   }
 
   return false;
+}
+
+/// The kind of the service [name].
+///
+/// A service without a kind is a service of a contract. A kind the runtime
+/// does not know is refused, so a manifest does not hold a participant that
+/// nobody knows how to start.
+WorkspaceServiceKind _kindOf(Object? value, String name) {
+  if (value == null) {
+    return WorkspaceServiceKind.service;
+  }
+  final kind = WorkspaceServiceKind.byName('$value');
+  if (kind == null) {
+    throw WorkspaceException(
+      'The service "$name" has the kind "$value", which is not a kind the '
+      'runtime knows. The kinds are: '
+      '${WorkspaceServiceKind.values.map((kind) => kind.label).join(', ')}.',
+    );
+  }
+  return kind;
 }
 
 /// The variables of a map of the manifest.

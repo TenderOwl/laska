@@ -279,6 +279,11 @@ ArgParser buildParser() {
       help: 'Workspace manifest the service is added to.',
       defaultsTo: 'laska.yaml',
     )
+    ..addMultiOption(
+      'calls',
+      help: 'Service of the workspace the app calls. The option may be '
+          'repeated. Without it the app calls every service of the workspace.',
+    )
     ..addFlag(
       'local',
       negatable: false,

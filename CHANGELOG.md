@@ -1,5 +1,22 @@
 ## Unreleased
 
+- **A workspace may carry a frontend.** A service of a workspace is not always
+  an API: sometimes it carries the frontend — a landing page, an admin panel —
+  and the frontend calls the other services over their contracts. That
+  participant is the `app` of the workspace.
+  - `laska new app <name>` writes an app that is ready to run: it serves the
+    files of the frontend, it calls the services behind it through the typed
+    clients of their contracts, and it comes with a test. The option `--calls`
+    narrows the services it calls down, and it may be repeated.
+  - The app passes the headers of the caller to the services behind it, so the
+    token of the session of the browser reaches them and the middleware of the
+    authentication checks it there.
+  - The manifest of the workspace holds the kind of a participant: `kind: app`
+    for an app, and nothing for a service of a contract. The tools of the
+    workspace and the reader of the manifest know what the participant is.
+  - The image of an app holds the files of the frontend, because the app
+    serves them.
+
 - **A call takes the headers of the caller.** The generated client passes the
   headers of a call to the service it talks to, so a service that carries the
   frontend of a workspace passes the token of the session to the services it

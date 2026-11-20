@@ -14,11 +14,23 @@ import 'workspace.dart';
 /// The image is built in two steps: the Dart SDK compiles the service, and the
 /// runtime image holds the binary and nothing else. The build context is the
 /// directory of the service.
+///
+/// An app serves the files of the frontend, so the image of an app holds them
+/// as well: the files are copied into the image and the variable
+/// `LASKA_WEB_ROOT` points at them.
 String renderDockerfile(
   WorkspaceService service, {
   String image = 'laska',
-}) =>
-    '''# The image of the ${service.name} service.
+}) {
+  final frontend = service.kind == WorkspaceServiceKind.app
+      ? '''
+# The app serves the files of the frontend, so they are part of the image.
+COPY --from=build /app/web /app/web
+ENV LASKA_WEB_ROOT=/app/web
+'''
+      : '';
+
+  return '''# The image of the ${service.name} service.
 #
 # The image is built from the directory of the service:
 #   docker build -f deploy/${service.name}/Dockerfile -t $image/${service.name}:latest .
@@ -35,10 +47,11 @@ RUN dart compile exe bin/server.dart -o /app/server
 FROM scratch
 COPY --from=build /runtime/ /
 COPY --from=build /app/server /app/server
-
+$frontend
 EXPOSE ${service.port}
 ENTRYPOINT ["/app/server"]
 ''';
+}
 
 /// The files a Docker build does not need.
 String renderDockerignore() => '''.dart_tool

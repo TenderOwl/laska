@@ -148,11 +148,15 @@ abstract class ShopGatewayService {
   Future<ShopView> getShopView(GetShopViewRequest request);
 }
 
-/// Registers the REST projection of [service] on [app].
+/// Registers the projections of [service] on [app].
+///
+/// The service is registered over HTTP and over gRPC, so the
+/// contract of the service is served on both transports.
 void registerShopGatewayService(
   Laska app,
   ShopGatewayService service, {
   List<Middleware> middleware = const <Middleware>[],
+  bool grpc = true,
 }) {
   app.get(
     '/v1/shop_gateway/:id',
@@ -165,6 +169,22 @@ void registerShopGatewayService(
     },
     middleware: middleware,
   );
+
+  if (grpc) {
+    app.grpc.add(
+      GrpcService(
+        name: 'shop_gateway.v1.ShopGatewayService',
+        methods: <String, GrpcHandler>{
+          'GetShopView': (bytes) async {
+            final request = GetShopViewRequest.fromProtoBytes(bytes);
+            final response = await service.getShopView(request);
+            return response.toProtoBytes();
+          },
+        },
+        middleware: middleware,
+      ),
+    );
+  }
 }
 
 /// The policies of the methods of the `ShopGatewayService` service.
@@ -256,29 +276,38 @@ class ShopGatewayServiceClient {
   );
 
   /// GetShopView returns a single record by its identifier.
+  ///
+  /// The [headers] are sent with the call, e.g. the token of the caller.
+  ///
+  /// The client writes the `accept` and the `content-type` itself.
   Future<ShopView> getShopView(GetShopViewRequest request,
-      {String? idempotencyKey}) async {
+      {String? idempotencyKey, Map<String, String>? headers}) async {
     final uri = _transport.buildUri(
       '/v1/shop_gateway/${Uri.encodeComponent(request.id.toString())}',
       '/shop_gateway.v1.ShopGatewayService/GetShopView',
     );
 
-    final headers = <String, String>{
-      'accept': 'application/json',
+    final requestHeaders = <String, String>{
+      ...?headers,
+      'accept': _transport.bodyFormat == BodyFormat.protobuf
+          ? 'application/protobuf'
+          : 'application/json',
     };
 
     if (idempotencyKey != null) {
-      headers['idempotency-key'] = idempotencyKey;
+      requestHeaders['idempotency-key'] = idempotencyKey;
     }
 
-    final body = null;
+    final body = _transport.bodyFormat == BodyFormat.protobuf
+        ? request.toProtoBytes()
+        : null;
 
     final response = await _send(
       'GetShopView',
       'ShopGatewayService.GetShopView',
       'get',
       uri,
-      headers,
+      requestHeaders,
       body,
     );
 
