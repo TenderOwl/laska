@@ -85,6 +85,21 @@ class Response {
         body: utf8.encode(data),
       );
 
+  /// Creates an HTML response.
+  factory Response.html(
+    String data, {
+    int status = 200,
+    Map<String, String>? headers,
+  }) =>
+      Response(
+        status: status,
+        headers: <String, String>{
+          'content-type': 'text/html; charset=utf-8',
+          ...?headers,
+        },
+        body: utf8.encode(data),
+      );
+
   /// Creates a response with raw bytes.
   factory Response.bytes(
     List<int> data, {

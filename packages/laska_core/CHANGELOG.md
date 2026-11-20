@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- The files of a directory are served by the runtime: `app.staticFiles(prefix,
+  directory)` mounts a directory under a prefix. A file is served with the
+  content type of its extension, with the validators of the cache — an `ETag`,
+  a `Last-Modified` and a `304` without a body — and with the header
+  `X-Content-Type-Options: nosniff`. The path of the request is decoded by the
+  runtime, and a path that points outside of the directory is refused.
+- `Response.html` and `ctx.html` build an answer with the content type of a
+  document of HTML: `text/html; charset=utf-8`.
+
 - The well-known types of protobuf are part of the runtime: `ProtoTimestamp`,
   `ProtoDuration`, `ProtoAny` and `ProtoEmpty`. They know the wire format and
   the JSON of the protocol buffers, so every service of a contract speaks of

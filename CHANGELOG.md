@@ -1,5 +1,23 @@
 ## Unreleased
 
+- **A service serves the files and the HTML of the frontend.** A workspace does
+  not hold only APIs: a service may carry the frontend of the workspace — a
+  landing page, an admin panel — and the runtime serves the files of a
+  directory and answers with HTML.
+  - `app.staticFiles('/assets', 'web/assets')` mounts a directory under a
+    prefix. The files are served with the content type of their extension, with
+    the validators of the cache — an `ETag`, a `Last-Modified` and a `304`
+    without a body — and with the header that keeps a browser from guessing
+    the type of a file.
+  - The path of the file is decoded by the runtime, and a path that leaves the
+    directory is refused: `..`, encoded as well, a separator inside of a
+    segment, and a link that points outside of the directory.
+  - A registration may name a `fallback` file, e.g. `index.html` for a single
+    page application, and a `maxAge`, e.g. an hour for the files of a build.
+  - `ctx.html(...)` and `Response.html(...)` answer with a document of HTML.
+  - The runtime builds nothing and renders nothing: the application writes the
+    HTML and the frontend is built by the toolchain of the application.
+
 - **The SDK of a contract in Go.** A contract is not only a service of Dart: it
   is the contract of every service that speaks it. The command `laska contract
   sdk --lang=go` writes the SDK of a contract in Go, and the SDK is a module of

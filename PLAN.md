@@ -17,8 +17,9 @@ install it. The resilience layer gives every outgoing call a timeout, a retry wi
 breaker, a bulkhead and an idempotency key — and the policy of the call is written **in the
 contract**, so the way a service is called is visible to everyone who reads it (§4.12). The
 workspace layer scaffolds a service from a contract, runs a whole workspace with one command and
-writes the images, the manifests and the recipe of the pipeline (§5.5). See §6 for
-what is done and what is left.
+writes the images, the manifests and the recipe of the pipeline (§5.5). The runtime also serves the
+files of a directory and answers with HTML, so a service may carry the frontend of a workspace
+(§4.14). See §6 for what is done and what is left.
 
 ---
 
@@ -524,6 +525,36 @@ Instead:
 The honest trade: a service author writes a few more lines of SQL than they would with an ORM,
 and gains an ORM-independent schema, no codegen step, and no framework lock-in on the data layer.
 
+### 4.14 The frontend of a workspace — the files and the HTML, nothing more
+
+A workspace does not hold only APIs: a service may carry the frontend of the workspace — a landing
+page, an admin panel — and the frontend calls the other services over their contracts. Such a
+service is the third kind of a participant of the workspace, next to the `service` and the
+`gateway`.
+
+The runtime serves the files of a directory and answers with HTML:
+
+- `app.staticFiles(prefix, directory)` mounts a directory under a prefix. The file is served with
+  the content type of its extension, with the validators of the cache (`ETag`, `Last-Modified` and a
+  `304` without a body) and with `X-Content-Type-Options: nosniff`. The path of the request is
+  decoded by the runtime, and a path that points outside of the directory is refused.
+- `ctx.html(...)` and `Response.html(...)` answer with a document of HTML.
+
+The boundary is drawn on purpose:
+
+- **Laska does not render the templates.** The HTML of an answer is written by the application; a
+  service that needs templates picks a library for them.
+- **Laska does not build the frontend.** The bundler of the application builds it, and the runtime
+  serves the result.
+- **Laska does not hold the state of the browser.** The state of the caller lives in the services
+  of the workspace, and the frontend holds the token of it.
+
+So Laska is not a "mini-Django": it does not become the framework of the frontend, it stays the
+runtime of the service that carries the frontend. The whole of the track is three steps: the
+runtime (done), the headers of a call in the generated client (so the frontend passes the token of
+the session), and the scaffold `laska new app` with the kind `app` in the manifest of the
+workspace.
+
 ---
 
 ## 5. Feature specs
@@ -535,8 +566,11 @@ and gains an ORM-independent schema, no codegen step, and no framework lock-in o
 - `Laska` app object: route verbs, `group`, `use`, `alias`, `urlFor`, `database`,
   `migrationsDirectory`, `dispatcher`.
 - `Request` — method, path, `uri`, headers, `query`, `params`, `body`, `json()`, `id`.
-- `Response` — `json`, `text`, `bytes`, `problem` (RFC 9457), `copyWith`.
-- `Context` — request + app + `params`, `query`, `headers`, `json`, `text`.
+- `Response` — `json`, `text`, `html`, `bytes`, `problem` (RFC 9457), `copyWith`.
+- `Context` — request + app + `params`, `query`, `headers`, `json`, `text`, `html`.
+- `StaticFiles` — the files of a directory: `app.staticFiles(prefix, directory)`, the content types
+  by the extension, the validators of the cache (`ETag`, `Last-Modified`, `304`) and the safe path
+  that does not leave the directory.
 - `Dispatcher` — the single place where routing, the middleware chain and the error rendering meet;
   used by the server and by the test harness alike.
 - `Config` — environment over `.env`, typed accessors (`string`, `integer`, `number`, `boolean`,
@@ -817,8 +851,12 @@ The guide of the examples is `docs/examples.md`.
 ## 7. Explicitly out of scope for v1
 
 - **An ORM with codegen** (use `package:postgres` + SQL migrations; adapters later, separately).
-- **Admin panel** — Django's differentiator, not the audience's need.
-- **Server-side templates** — Jaspr covers the template/site niche in Dart.
+- **Admin panel** — Django's differentiator, not the audience's need. A service may carry the
+  frontend of a workspace, but Laska does not build the panel itself (§4.14).
+- **Server-side templates** — Jaspr covers the template/site niche in Dart. The runtime answers
+  with HTML, and the application writes it (§4.14).
+- **The build of the frontend** — the bundler of the application builds it, the runtime serves the
+  result (§4.14).
 - **Realtime WebSocket framework** — Serverpod's territory.
 - **GraphQL**, multi-tenancy, i18n, file uploads, mailer.
 - **Redis as a requirement** (Postgres-only is enough to start; Redis drivers are additive).
@@ -882,6 +920,11 @@ service, and the release hardening closed the gaps a v1.0 cannot have.
    the name of the contract, and the generated code registers the service over gRPC next to its REST
    projection. What is left is the reflection of the server, so a tool of the ecosystem discovers
    the methods of a running service.
+4. **The frontend of the workspace** — a service may carry the frontend of the workspace, and the
+   runtime serves the files of a directory and answers with HTML (§4.14). The runtime is done; the
+   headers of a call in the generated Dart client come next (so the frontend passes the token of
+   the session), and then the scaffold `laska new app` with the kind `app` in the manifest of the
+   workspace.
 
 Deferred to v1.1: the `@injectable` codegen, the ORM adapters and the Redis and NATS backends.
 

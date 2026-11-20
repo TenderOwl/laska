@@ -33,6 +33,9 @@ await run(app);
   the idempotency of the calls to the other services.
 - **Authentication** — the tokens (JWT), the JWKS, the API keys, the sessions and
   the rate limiting.
+- **Files and HTML** — `app.staticFiles(prefix, directory)` serves the files of a
+  directory with the content type of their extension and with the validators of
+  the cache, and `ctx.html(...)` answers with a document of HTML.
 
 ## The documentation
 

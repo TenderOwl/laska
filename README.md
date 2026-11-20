@@ -423,6 +423,12 @@ app.group('/v1', (group) {
   second; `Logger` writes one JSON object per line and redacts the secrets.
 - **Data** — `Database` over `package:postgres` and `package:sqlite3`, with SQL migrations applied
   by `laska migrate:run` and recorded in a `schema_migrations` ledger.
+- **Files and HTML** — `app.staticFiles('/assets', 'web/assets')` serves the files of a directory
+  with the content type of their extension, with the validators of the cache (`ETag`,
+  `Last-Modified`, `304`) and without a path that leaves the directory; `ctx.html(...)` answers
+  with a document of HTML. The runtime builds nothing and renders nothing — the application writes
+  the HTML and the frontend is built by the toolchain of the application. See
+  [the guide of the files](docs/static-files.md).
 
 ## Authentication
 

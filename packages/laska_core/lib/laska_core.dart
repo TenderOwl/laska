@@ -46,6 +46,7 @@ export 'src/resilience/status.dart';
 export 'src/response.dart';
 export 'src/router.dart';
 export 'src/server.dart';
+export 'src/static_files.dart';
 export 'src/supervisor.dart';
 export 'src/telemetry/database.dart';
 export 'src/telemetry/metrics.dart';

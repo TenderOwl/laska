@@ -5,6 +5,7 @@ import 'logger.dart';
 import 'middleware.dart';
 import 'response.dart';
 import 'router.dart';
+import 'static_files.dart';
 
 /// The application object.
 ///
@@ -195,6 +196,40 @@ class Laska {
     );
     groups.add(child);
     callback(child);
+  }
+
+  /// Serves the files of [directory] under [prefix].
+  ///
+  /// The prefix is the path the files are served from, e.g. `/assets` for the
+  /// directory `web/assets`. A file is served with the content type of its
+  /// extension, with the validators of the cache — an `ETag` and a
+  /// `Last-Modified` — and with the header that keeps a browser from
+  /// guessing the type of a file.
+  ///
+  /// The [fallback] file is served when the requested one is missing, e.g.
+  /// `index.html` for a single page application. The [maxAge] is how long a
+  /// browser may keep the file, and the [index] is the file served when the
+  /// request points at a directory.
+  ///
+  /// The extra [headers] are written to every answer of the files.
+  void staticFiles(
+    String prefix,
+    String directory, {
+    String? fallback,
+    Duration? maxAge,
+    String index = 'index.html',
+    Map<String, String> headers = const <String, String>{},
+  }) {
+    final files = StaticFiles(
+      directory: directory,
+      fallback: fallback,
+      maxAge: maxAge,
+      index: index,
+      headers: headers,
+    );
+    final path = staticRoutePath(prefix);
+    add('GET', path, (ctx) => files.handle(ctx.request));
+    add('HEAD', path, (ctx) => files.handle(ctx.request));
   }
 
   /// Builds the path of the route registered under [name].

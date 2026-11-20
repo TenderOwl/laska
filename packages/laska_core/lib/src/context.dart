@@ -48,4 +48,11 @@ class Context {
   /// Builds a plain text response.
   Response text(String data, {int status = 200}) =>
       Response.text(data, status: status);
+
+  /// Builds an HTML response.
+  ///
+  /// The answer holds the content type of a document of HTML, so a browser
+  /// reads it as a page and not as a text.
+  Response html(String data, {int status = 200}) =>
+      Response.html(data, status: status);
 }
