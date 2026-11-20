@@ -495,6 +495,7 @@ class _Cli {
         address: options.option('address')!,
         port: int.tryParse(options.option('port') ?? '') ?? 3789,
         environment: environment,
+        workingDirectory: workingDirectoryOf(entrypoint),
         logger: Logger(service: 'laska'),
       ),
     );
@@ -1090,6 +1091,10 @@ class _Cli {
             executable: Platform.resolvedExecutable,
             address: '127.0.0.1',
             port: service.port,
+            workingDirectory: workingDirectoryOf(
+              entrypoint.absolute.path,
+              fallback: manifest?.parent.absolute.path,
+            ),
             label: service.name,
             environment: <String, String>{
               ...Platform.environment,
@@ -1126,26 +1131,18 @@ class _Cli {
   /// that holds a `pubspec.yaml`. Returns the error of the command when the
   /// dependencies could not be resolved, and `null` when they are.
   Future<String?> _resolveDependencies(String entrypoint) async {
-    var directory = File(entrypoint).parent;
+    final directory = workingDirectoryOf(entrypoint);
+    if (directory == null) {
+      return null;
+    }
 
-    for (var depth = 0; depth < 4; depth++) {
-      if (File('${directory.path}/pubspec.yaml').existsSync()) {
-        final result = await Process.run(
-          Platform.resolvedExecutable,
-          <String>['pub', 'get'],
-          workingDirectory: directory.path,
-        );
-        if (result.exitCode != 0) {
-          return result.stderr.toString().trim();
-        }
-        return null;
-      }
-
-      final parent = directory.parent;
-      if (parent.path == directory.path) {
-        break;
-      }
-      directory = parent;
+    final result = await Process.run(
+      Platform.resolvedExecutable,
+      <String>['pub', 'get'],
+      workingDirectory: directory,
+    );
+    if (result.exitCode != 0) {
+      return result.stderr.toString().trim();
     }
 
     return null;

@@ -25,6 +25,7 @@ $ laska new app admin
 created: admin/lib/app.dart
 created: admin/bin/server.dart
 created: admin/web/index.html
+created: admin/web/app.css
 created: admin/web/app.js
 created: admin/test/app_test.dart
 created: admin/pubspec.yaml
@@ -65,11 +66,26 @@ $ laska new app admin --calls users --calls billing
 
 ## The frontend of the app
 
-The app serves the files of the directory `web/`:
+The app serves the files of the directory `web/` of its own package:
 
 ```dart
-app.staticFiles('/', files, fallback: 'index.html');
+app.staticFiles(
+  '/',
+  await frontendDirectory(
+    packageUri: Uri.parse('package:admin_app/app.dart'),
+    configured: Platform.environment['LASKA_WEB_ROOT'],
+  ),
+  fallback: 'index.html',
+);
 ```
+
+The directory of the files is the one of the package of the app, so the app
+serves the frontend no matter the directory the process was started in — the
+workspace may be started from the root of the workspace, from the package of
+the app or from anywhere else.
+
+The variable `LASKA_WEB_ROOT` overrules it: an absolute path is taken as it is,
+and a relative one is read against the package of the app as well.
 
 The build of the frontend belongs to the application: run `npm run build` (or
 the bundler of your choice) in the directory of the frontend and put the
@@ -162,10 +178,6 @@ ENV LASKA_WEB_ROOT=/app/web
 
 The variable `LASKA_WEB_ROOT` points at the files inside the image, and the app
 reads it:
-
-```dart
-final files = Platform.environment['LASKA_WEB_ROOT'] ?? 'web';
-```
 
 The image of a service of a contract holds no files of a frontend — it holds
 the binary alone.

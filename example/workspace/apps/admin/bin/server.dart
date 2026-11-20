@@ -9,7 +9,7 @@ Future<void> main(List<String> arguments) async {
     logger: Logger(service: 'admin', version: '0.1.0'),
   );
 
-  registerApp(app);
+  await registerApp(app);
 
   await run(app, arguments: arguments);
 }

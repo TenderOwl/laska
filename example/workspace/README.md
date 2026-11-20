@@ -92,6 +92,11 @@ the request: the two services answer with one trace. The app passes the headers
 of the caller to the service behind it, so the token of the session of the
 browser reaches the gateway.
 
+The files of the frontend live in the package of the app
+(`apps/admin/web`), so the app serves them no matter the directory the
+workspace was started in. The variable `LASKA_WEB_ROOT` overrules the
+directory of the package.
+
 ## The test
 
 `test/workspace_test.dart` of the gateway starts both services in the same
@@ -106,5 +111,7 @@ process — and checks that:
 `test/app_test.dart` of the app checks that:
 
 - the app serves the files of the frontend;
+- the app serves them from any directory, because they live in the package of
+  the app;
 - the app forwards the call to the service behind it, and the headers of the
   caller travel with the call.

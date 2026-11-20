@@ -556,6 +556,11 @@ headers reach the service as the headers of the HTTP call and as the metadata of
 the app of the workspace (`laska new app`, the kind `app` in the manifest and the image that holds
 the frontend).
 
+The files of the frontend live in the package of the app, so the app serves them no matter the
+directory the process was started in, and every participant of a workspace runs in the directory of
+its own package — the paths of a service are read against it, not against the directory the command
+was started in.
+
 ---
 
 ## 5. Feature specs
@@ -572,6 +577,9 @@ the frontend).
 - `StaticFiles` — the files of a directory: `app.staticFiles(prefix, directory)`, the content types
   by the extension, the validators of the cache (`ETag`, `Last-Modified`, `304`) and the safe path
   that does not leave the directory.
+- `packageDirectory(uri)` and `frontendDirectory(...)` — the directory of a package and the directory
+  of the files of a frontend inside of it, so the files are found no matter the directory the process
+  was started in.
 - `Dispatcher` — the single place where routing, the middleware chain and the error rendering meet;
   used by the server and by the test harness alike.
 - `Config` — environment over `.env`, typed accessors (`string`, `integer`, `number`, `boolean`,

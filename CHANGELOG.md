@@ -16,6 +16,12 @@
     workspace and the reader of the manifest know what the participant is.
   - The image of an app holds the files of the frontend, because the app
     serves them.
+  - The files of the frontend live in the package of the app, so the app
+    serves them no matter the directory it was started in. The variable
+    `LASKA_WEB_ROOT` overrules the directory of the package.
+  - Every participant of a workspace runs in the directory of its own package,
+    so the paths of a service are read against it and not against the
+    directory the command was started in.
 
 - **A call takes the headers of the caller.** The generated client passes the
   headers of a call to the service it talks to, so a service that carries the

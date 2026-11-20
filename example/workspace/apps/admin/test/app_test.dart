@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:admin_app/app.dart';
 import 'package:laska_core/laska_core.dart';
 import 'package:laska_test/laska_test.dart';
@@ -8,13 +10,37 @@ void main() {
   group('the app of the workspace', () {
     test('serves the frontend', () async {
       final app = Laska();
-      registerApp(app);
+      await registerApp(app);
 
       final client = testClient(app);
 
       final response = await client.get('/');
       response.expectStatus(200);
       expect(response.body, contains('<h1>Admin</h1>'));
+    });
+
+    test('serves the frontend from any directory', () async {
+      // The files of the frontend live in the package of the app, so the app
+      // serves them no matter the directory the process was started in.
+      final elsewhere = Directory.systemTemp.createTempSync('laska_app_cwd');
+      final current = Directory.current.path;
+      Directory.current = elsewhere.path;
+
+      try {
+        final app = Laska();
+        await registerApp(app);
+
+        final client = testClient(app);
+
+        final response = await client.get('/');
+        response.expectStatus(200);
+        expect(response.body, contains('<h1>Admin</h1>'));
+      } finally {
+        Directory.current = current;
+        if (elsewhere.existsSync()) {
+          elsewhere.deleteSync(recursive: true);
+        }
+      }
     });
 
     test('forwards the call to the service behind it', () async {
@@ -25,7 +51,7 @@ void main() {
       );
 
       final app = Laska();
-      registerApp(
+      await registerApp(
         app,
         shopGateway: ShopGatewayServiceClient(
           baseUrl: 'http://localhost:8081',

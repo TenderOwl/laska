@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- The runtime knows the directory of a package: `packageDirectory(uri)` gives
+  the directory of the package the URI points into, and `frontendDirectory(...)`
+  gives the directory of the files of a frontend inside of it. The files are
+  found no matter the directory the process was started in, and the variable
+  `LASKA_WEB_ROOT` overrules the directory of the package.
+- The supervisor starts its workers in the directory it is given:
+  `SupervisorOptions(workingDirectory: ...)` makes a service run in the
+  directory of its own package.
 - The gRPC transport sends the headers of a request as the metadata of the
   call. The names of the metadata of gRPC are in lower case, so the names of
   the headers are lower-cased as well, and the headers that belong to the

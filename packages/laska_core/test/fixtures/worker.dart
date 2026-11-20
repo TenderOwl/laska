@@ -4,7 +4,8 @@ import 'dart:io';
 /// A worker that reports its environment and then stays alive.
 ///
 /// The supervisor test uses it to check that every worker gets its own id,
-/// the address and the port of the service.
+/// the address and the port of the service, and the directory it was started
+/// in.
 Future<void> main() async {
   final directory = Platform.environment['LASKA_TEST_OUTPUT'];
   final id = Platform.environment['LASKA_WORKER_ID'] ?? '?';
@@ -12,7 +13,9 @@ Future<void> main() async {
   final address = Platform.environment['LASKA_ADDRESS'] ?? '?';
 
   if (directory != null) {
-    File('$directory/worker-$id.txt').writeAsStringSync('$id $port $address\n');
+    File('$directory/worker-$id.txt').writeAsStringSync(
+      '$id $port $address\n${Directory.current.path}\n',
+    );
   }
 
   stdout.writeln('worker $id ready');

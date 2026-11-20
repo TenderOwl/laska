@@ -64,8 +64,28 @@ void main() {
       expect(File('${app.path}/lib/app.dart').existsSync(), isTrue);
       expect(File('${app.path}/web/index.html').existsSync(), isTrue);
       expect(File('${app.path}/web/app.js').existsSync(), isTrue);
+      expect(File('${app.path}/web/app.css').existsSync(), isTrue);
       expect(File('${app.path}/test/app_test.dart').existsSync(), isTrue);
       expect(File('${app.path}/pubspec.yaml').existsSync(), isTrue);
+    });
+
+    test('the app waits for its routes before it serves', () async {
+      await _scaffoldService();
+
+      await _run(<String>[
+        'new',
+        'app',
+        'admin',
+        '--out',
+        workspace.path,
+        '--manifest',
+        '${workspace.path}/laska.yaml',
+      ]);
+
+      final entrypoint =
+          File('${workspace.path}/admin/bin/server.dart').readAsStringSync();
+
+      expect(entrypoint, contains('await registerApp(app);'));
     });
 
     test('the app serves the frontend of the workspace', () async {
@@ -84,8 +104,38 @@ void main() {
       final code =
           File('${workspace.path}/admin/lib/app.dart').readAsStringSync();
 
-      expect(code,
-          contains("app.staticFiles('/', files, fallback: 'index.html')"));
+      expect(code, contains('app.staticFiles('));
+      expect(code, contains("fallback: 'index.html',"));
+    });
+
+    test('the app looks for the frontend in its own package', () async {
+      await _scaffoldService();
+
+      await _run(<String>[
+        'new',
+        'app',
+        'admin',
+        '--out',
+        workspace.path,
+        '--manifest',
+        '${workspace.path}/laska.yaml',
+      ]);
+
+      final code =
+          File('${workspace.path}/admin/lib/app.dart').readAsStringSync();
+
+      // The files of the frontend live in the package of the app, so the app
+      // serves them no matter the directory it was started in.
+      expect(code, contains('await frontendDirectory('));
+      expect(
+        code,
+        contains("packageUri: Uri.parse('package:admin_app/app.dart'),"),
+      );
+      expect(
+        code,
+        contains("configured: Platform.environment['LASKA_WEB_ROOT'],"),
+      );
+      expect(code, isNot(contains("?? 'web'")));
     });
 
     test('the app calls the service behind it with the typed client', () async {

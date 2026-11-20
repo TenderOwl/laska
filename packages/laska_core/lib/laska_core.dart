@@ -33,6 +33,7 @@ export 'src/middleware/builtin.dart';
 export 'src/observability.dart';
 export 'src/protobuf.dart';
 export 'src/parsing.dart';
+export 'src/paths.dart';
 export 'src/request.dart';
 export 'src/resilience/bulkhead.dart';
 export 'src/resilience/circuit_breaker.dart';

@@ -182,7 +182,9 @@ Future<ScaffoldResult> scaffoldApp(
   final written = <String>[];
 
   final appFile = File('${lib.path}/app.dart');
-  await appFile.writeAsString(_app(dependencies: dependencies));
+  await appFile.writeAsString(
+    _app(package: '${snake}_app', dependencies: dependencies),
+  );
   written.add(appFile.path);
 
   final entrypoint = File('${bin.path}/server.dart');
@@ -198,6 +200,10 @@ Future<ScaffoldResult> scaffoldApp(
   final script = File('${web.path}/app.js');
   await script.writeAsString(_script(dependencies: dependencies));
   written.add(script.path);
+
+  final style = File('${web.path}/app.css');
+  await style.writeAsString(_style());
+  written.add(style.path);
 
   final testFile = File('${test.path}/app_test.dart');
   await testFile.writeAsString(
@@ -322,7 +328,10 @@ String _simpleName(String type) {
 }
 
 /// The code of the app.
-String _app({required List<AppDependency> dependencies}) {
+String _app({
+  required String package,
+  required List<AppDependency> dependencies,
+}) {
   final buffer = StringBuffer()
     ..writeln("import 'dart:async';")
     ..writeln("import 'dart:io';")
@@ -352,7 +361,7 @@ String _app({required List<AppDependency> dependencies}) {
       ? ''
       : ', {${dependencies.map((dependency) => '${dependency.client}? ${camelCase(dependency.name)}').join(', ')}}';
   buffer
-    ..writeln('void registerApp(Laska app$parameters) {')
+    ..writeln('Future<void> registerApp(Laska app$parameters) async {')
     ..writeln(
         '  // The request of the caller is kept in the zone of the call, so')
     ..writeln(
@@ -362,10 +371,17 @@ String _app({required List<AppDependency> dependencies}) {
     ..writeln()
     ..writeln('  // The frontend of the workspace. The build of the frontend')
     ..writeln('  // belongs to the application: put the result of it in the')
-    ..writeln('  // directory of the files.')
-    ..writeln(
-        "  final files = Platform.environment['LASKA_WEB_ROOT'] ?? 'web';")
-    ..writeln("  app.staticFiles('/', files, fallback: 'index.html');");
+    ..writeln('  // directory of the files. The directory is the one of the')
+    ..writeln('  // package of the app, so the app serves the frontend no')
+    ..writeln('  // matter the directory it was started in.')
+    ..writeln('  app.staticFiles(')
+    ..writeln("    '/',")
+    ..writeln('    await frontendDirectory(')
+    ..writeln("      packageUri: Uri.parse('package:$package/app.dart'),")
+    ..writeln("      configured: Platform.environment['LASKA_WEB_ROOT'],")
+    ..writeln('    ),')
+    ..writeln("    fallback: 'index.html',")
+    ..writeln('  );');
 
   for (final dependency in dependencies) {
     final url = '${dependency.name.toUpperCase().replaceAll('-', '_')}_URL';
@@ -456,7 +472,7 @@ Future<void> main(List<String> arguments) async {
     logger: Logger(service: '$name', version: '$projectVersion'),
   );
 
-  registerApp(app);
+  await registerApp(app);
 
   await run(app, arguments: arguments);
 }
@@ -537,6 +553,34 @@ String _script({required List<AppDependency> dependencies}) {
   return buffer.toString();
 }
 
+/// The style of the frontend of the app.
+String _style() => ''':root {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+}
+
+h1 {
+  font-size: 1.75rem;
+  margin: 0 0 0.5rem;
+}
+
+p {
+  margin: 0;
+  opacity: 0.8;
+}
+''';
+
 /// The test of the app.
 String _test({
   required String name,
@@ -559,7 +603,7 @@ String _test({
     ..writeln('void main() {')
     ..writeln("  test('the app serves the frontend', () async {")
     ..writeln('    final app = Laska();')
-    ..writeln('    registerApp(app);')
+    ..writeln('    await registerApp(app);')
     ..writeln()
     ..writeln('    final client = testClient(app);')
     ..writeln()
@@ -583,7 +627,7 @@ String _test({
           '    transport.enqueueResponse(200, body: <String, Object?>{});')
       ..writeln()
       ..writeln('    final app = Laska();')
-      ..writeln('    registerApp(')
+      ..writeln('    await registerApp(')
       ..writeln('      app,')
       ..writeln('      ${camelCase(dependency.name)}: ${dependency.client}(')
       ..writeln("        baseUrl: 'http://localhost:8080',")

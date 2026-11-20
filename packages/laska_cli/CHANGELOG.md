@@ -12,6 +12,11 @@
   of services stays the manifest it was. A kind nobody knows is refused.
 - The image of an app holds the files of the frontend, because the app serves
   them, and the variable `LASKA_WEB_ROOT` points at them.
+- The files of the frontend live in the package of the app, so the app serves
+  them no matter the directory it was started in.
+- Every participant of a workspace runs in the directory of its own package,
+  so the paths of a service are read against it and not against the directory
+  the command was started in.
 - `laska contract sdk --lang=go` writes the SDK of a contract in Go: the
   messages of the contract, the clients of its services and the runtime they
   need. The SDK is a module of its own, and the path of the module is given

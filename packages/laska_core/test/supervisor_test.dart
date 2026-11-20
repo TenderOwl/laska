@@ -11,10 +11,26 @@ void main() {
     directory = Directory.systemTemp.createTempSync('laska_supervisor_');
   });
 
-  tearDown(() {
-    if (directory.existsSync()) {
-      directory.deleteSync(recursive: true);
+  /// Deletes the [directory] when the system lets it go.
+  ///
+  /// A worker that runs in a directory holds it while it lives, and the system
+  /// may hold it for a moment after it stops.
+  Future<void> deleteDirectory(Directory directory) async {
+    for (var attempt = 0; attempt < 50; attempt++) {
+      if (!directory.existsSync()) {
+        return;
+      }
+      try {
+        directory.deleteSync(recursive: true);
+        return;
+      } on FileSystemException {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
     }
+  }
+
+  tearDown(() async {
+    await deleteDirectory(directory);
   });
 
   String fixturePath() => File('test/fixtures/worker.dart').absolute.path;
@@ -53,6 +69,9 @@ void main() {
     }
     return file.readAsStringSync();
   }
+
+  /// The lines of the report of the worker [worker].
+  List<String> reportLines(int worker) => report(worker).trim().split('\n');
 
   group('Supervisor', () {
     test('uses the number of cores by default', () {
@@ -136,9 +155,43 @@ void main() {
         () => report(0).endsWith('\n') && report(1).endsWith('\n'),
       );
 
-      expect(report(0).trim(), '0 4321 127.0.0.1');
-      expect(report(1).trim(), '1 4321 127.0.0.1');
+      expect(reportLines(0).first, '0 4321 127.0.0.1');
+      expect(reportLines(1).first, '1 4321 127.0.0.1');
       expect(supervisor.runningWorkers, 2);
+    });
+
+    test('starts the workers in the given directory', () async {
+      // The directory of the worker is its own, so it is not the directory of
+      // the reports: a worker that runs in it holds it while it lives.
+      final work =
+          Directory.systemTemp.createTempSync('laska_supervisor_work_');
+
+      final supervisor = Supervisor(
+        SupervisorOptions(
+          entrypoint: fixturePath(),
+          executable: Platform.resolvedExecutable,
+          workers: 1,
+          address: '127.0.0.1',
+          port: 4323,
+          environment: <String, String>{'LASKA_TEST_OUTPUT': directory.path},
+          workingDirectory: work.path,
+          logger: Logger(sink: (_) {}),
+        ),
+      );
+
+      final run = supervisor.run();
+      addTearDown(() async {
+        await supervisor.stop();
+        await run;
+        await deleteDirectory(work);
+      });
+
+      await waitFor(() => report(0).endsWith('\n'));
+
+      // The worker runs in the directory it was given, so the paths of the
+      // service are read against its own package.
+      final name = work.path.split(Platform.pathSeparator).last;
+      expect(reportLines(0)[1], endsWith(name));
     });
 
     test('stops every worker', () async {

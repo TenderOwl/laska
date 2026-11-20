@@ -29,6 +29,7 @@ class SupervisorOptions {
     this.restartDelay = const Duration(seconds: 1),
     this.maxRestarts = 5,
     this.environment = const <String, String>{},
+    this.workingDirectory,
     this.label,
     this.logger,
   });
@@ -65,6 +66,13 @@ class SupervisorOptions {
   /// The variables of the supervisor are inherited, so a worker sees the
   /// configuration of the service.
   final Map<String, String> environment;
+
+  /// The directory the workers are started in.
+  ///
+  /// The value is `null` when the workers inherit the directory of the
+  /// supervisor. A service is usually started in the directory of its own
+  /// package, so the paths of the service are read against it.
+  final String? workingDirectory;
 
   /// The label written in front of the log lines of the workers.
   ///
@@ -204,6 +212,7 @@ class Supervisor {
       <String>[options.entrypoint],
       environment: environment,
       includeParentEnvironment: false,
+      workingDirectory: options.workingDirectory,
     );
 
     _workers[id] = process;

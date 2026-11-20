@@ -14,15 +14,26 @@ const Object _caller = 'laska.app.caller';
 ///
 /// The clients of the services may be given, so a test answers the calls of
 /// the app without opening a socket.
-void registerApp(Laska app, {ShopGatewayServiceClient? shopGateway}) {
+Future<void> registerApp(
+  Laska app, {
+  ShopGatewayServiceClient? shopGateway,
+}) async {
   // The request of the caller is kept in the zone of the call, so the proxy
   // of a service can pass the headers of the caller with the call.
   app.use(_keepTheCaller());
 
   // The frontend of the workspace. The build of the frontend belongs to the
-  // application: put the result of it in the directory of the files.
-  final files = Platform.environment['LASKA_WEB_ROOT'] ?? 'web';
-  app.staticFiles('/', files, fallback: 'index.html');
+  // application: put the result of it in the directory of the files. The
+  // directory is the one of the package of the app, so the app serves the
+  // frontend no matter the directory it was started in.
+  app.staticFiles(
+    '/',
+    await frontendDirectory(
+      packageUri: Uri.parse('package:admin_app/app.dart'),
+      configured: Platform.environment['LASKA_WEB_ROOT'],
+    ),
+    fallback: 'index.html',
+  );
 
   // The service "shop_gateway" behind the app.
   final shopGatewayClient = shopGateway ??

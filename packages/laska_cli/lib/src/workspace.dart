@@ -293,6 +293,31 @@ String resolveEntrypoint(File manifest, String entrypoint) {
   return '${manifest.parent.absolute.path}/$entrypoint';
 }
 
+/// The directory the service of the [entrypoint] is started in.
+///
+/// The directory is the one of the package of the service — the directory that
+/// holds its `pubspec.yaml` — so the paths of the service are read against
+/// its own package and not against the directory the command was started in.
+///
+/// The [fallback] is used when the service does not belong to a package.
+String? workingDirectoryOf(String entrypoint, {String? fallback}) {
+  var directory = File(entrypoint).absolute.parent;
+
+  for (var depth = 0; depth < 8; depth++) {
+    if (File('${directory.path}/pubspec.yaml').existsSync()) {
+      return directory.path;
+    }
+
+    final parent = directory.parent;
+    if (parent.path == directory.path) {
+      break;
+    }
+    directory = parent;
+  }
+
+  return fallback;
+}
+
 /// The path of [target] relative to the directory of [from].
 ///
 /// The path uses the slashes of a manifest, whatever the platform is.

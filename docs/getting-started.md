@@ -156,6 +156,10 @@ The dependencies of every service are resolved before it starts, so a workspace
 that was just scaffolded runs without a manual `dart pub get`. The
 `--no-pub-get` flag skips that step.
 
+Every service runs in the directory of its own package — the directory that
+holds its `pubspec.yaml` — so the paths of a service are read against it and
+not against the directory the command was started in.
+
 ## Test the service
 
 The harness runs the service in process, through the same dispatcher as the

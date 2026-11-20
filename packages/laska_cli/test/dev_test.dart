@@ -398,6 +398,35 @@ services:
     });
   });
 
+  group('workingDirectoryOf', () {
+    test('is the directory of the package of the service', () {
+      final package = Directory('${workspace.path}/services/users');
+      Directory('${package.path}/bin').createSync(recursive: true);
+      File('${package.path}/pubspec.yaml').writeAsStringSync('name: users\n');
+
+      final directory = workingDirectoryOf(
+        '${package.path}/bin/server.dart',
+      );
+
+      expect(directory, package.path);
+    });
+
+    test('is the fallback when the service is not a package', () {
+      final directory = workingDirectoryOf(
+        '${workspace.path}/bin/server.dart',
+        fallback: workspace.path,
+      );
+
+      expect(directory, workspace.path);
+    });
+
+    test('is unknown without a fallback', () {
+      final directory = workingDirectoryOf('${workspace.path}/bin/server.dart');
+
+      expect(directory, isNull);
+    });
+  });
+
   group('waitForPort', () {
     test('returns true when the port answers', () async {
       final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
