@@ -214,7 +214,7 @@ const Map<String, CommandHelp> commandHelp = <String, CommandHelp>{
     examples: <String>[
       'laska upgrade --api users --from v1 --to v2',
       'laska upgrade --api users --from v1 --to v2 --dry-run',
-      'laska upgrade --from 0.1.0 --to 0.2.0',
+      'laska upgrade --from 0.2.0 --to 0.3.0',
     ],
   ),
   'help': CommandHelp(

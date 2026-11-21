@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.0
+
 - `laska new app <name>` writes the app of a workspace: the service that
   carries the frontend. It serves the files of the frontend, it calls the
   services behind it through the typed clients of their contracts and it comes

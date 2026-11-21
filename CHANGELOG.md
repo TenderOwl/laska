@@ -1,5 +1,7 @@
 ## Unreleased
 
+## 0.3.0
+
 - **A workspace may carry a frontend.** A service of a workspace is not always
   an API: sometimes it carries the frontend — a landing page, an admin panel —
   and the frontend calls the other services over their contracts. That

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.0
+
 - Every method of the generated client takes the headers of the call:
   `headers: {'authorization': 'Bearer ...'}`. The headers reach the service as
   the headers of the HTTP call and as the metadata of the gRPC call, so the

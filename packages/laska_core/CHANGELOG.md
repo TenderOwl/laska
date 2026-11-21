@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.0
+
 - The runtime knows the directory of a package: `packageDirectory(uri)` gives
   the directory of the package the URI points into, and `frontendDirectory(...)`
   gives the directory of the files of a frontend inside of it. The files are

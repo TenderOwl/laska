@@ -9,7 +9,7 @@ moves to a new version of its own API.
 
    ```yaml
    dependencies:
-     laska_core: ^0.2.0
+     laska_core: ^0.3.0
    ```
 
 2. Run `dart pub get` and read the [CHANGELOG](../CHANGELOG.md) of the
@@ -23,10 +23,10 @@ moves to a new version of its own API.
 3. Run the codemods of the step, if the version ships one:
 
    ```console
-   $ dart run laska_cli:laska upgrade --from 0.1.0 --to 0.2.0
+   $ dart run laska_cli:laska upgrade --from 0.2.0 --to 0.3.0
    ```
 
-   The command answers `No codemod is needed to go from 0.1.0 to 0.2.0.`
+   The command answers `No codemod is needed to go from 0.2.0 to 0.3.0.`
    when the step only adds something, so it is safe to run it every time.
 
 4. Run the format, the analyzer and the tests:
