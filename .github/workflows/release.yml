@@ -128,7 +128,18 @@ jobs:
           PUB_TOKEN: ${{ steps.token.outputs.token }}
         run: |
           dart pub token add https://pub.dev --env-var=PUB_TOKEN
-          dart run tool/publish.dart --all --force
+          # A package that depends on another one waits for the version of it to
+          # reach the index of pub.dev, and the index needs a moment for it. The
+          # publisher is re-runnable: a package that is published already is
+          # left alone, so a retry publishes only what is missing.
+          for attempt in 1 2 3 4 5 6; do
+            if dart run tool/publish.dart --all --force; then
+              exit 0
+            fi
+            echo "the publication did not finish; the index of pub.dev may not know the new version yet. Retry in 60s."
+            sleep 60
+          done
+          exit 1
 
   release:
     name: Open the release
@@ -162,3 +173,7 @@ jobs:
           else
             gh release create "$TAG" artifacts/* --title "Laska $TAG" --generate-notes --verify-tag
           fi
+          # A release that lost its tag stays a draft, and a draft is invisible
+          # to the readers of the releases. The release of the tag is published
+          # either way.
+          gh release edit "$TAG" --draft=false
