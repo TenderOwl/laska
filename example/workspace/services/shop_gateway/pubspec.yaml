@@ -10,10 +10,10 @@ resolution: workspace
 
 dependencies:
   http: ^1.6.0
-  laska_core: ^0.2.0
+  laska_core: ^0.3.0
   shop_service: {path: ../shop}
 
 dev_dependencies:
-  laska_contracts: ^0.2.0
-  laska_test: ^0.2.0
+  laska_contracts: ^0.3.0
+  laska_test: ^0.3.0
   test: ^1.33.0

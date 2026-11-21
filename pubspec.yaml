@@ -1,6 +1,6 @@
 name: laska
 description: A contract-first service framework for Dart.
-version: 0.2.0
+version: 0.3.0
 publish_to: none
 
 environment:
@@ -19,8 +19,8 @@ workspace:
   - example/workspace/apps/admin
 
 dependencies:
-  laska_core: ^0.2.0
-  laska_contracts: ^0.2.0
+  laska_core: ^0.3.0
+  laska_contracts: ^0.3.0
 
 dev_dependencies:
   lints: ^6.1.0

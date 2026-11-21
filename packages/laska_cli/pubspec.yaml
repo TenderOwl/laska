@@ -1,6 +1,6 @@
 name: laska_cli
 description: The laska command line interface — contract compilation, compatibility checks and scaffolding.
-version: 0.2.0
+version: 0.3.0
 repository: https://github.com/tenderowl/laska
 issue_tracker: https://github.com/tenderowl/laska/issues
 homepage: https://github.com/tenderowl/laska
@@ -16,8 +16,8 @@ executables:
 
 dependencies:
   args: ^2.7.0
-  laska_contracts: ^0.2.0
-  laska_core: ^0.2.0
+  laska_contracts: ^0.3.0
+  laska_core: ^0.3.0
   pub_semver: ^2.2.0
 
 dev_dependencies:

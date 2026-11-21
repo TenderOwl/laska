@@ -1,6 +1,6 @@
 name: laska_core
 description: Core runtime of the Laska service framework — routing, middleware, request/response.
-version: 0.2.0
+version: 0.3.0
 repository: https://github.com/tenderowl/laska
 issue_tracker: https://github.com/tenderowl/laska/issues
 homepage: https://github.com/tenderowl/laska
