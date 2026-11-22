@@ -15,18 +15,30 @@ import 'workspace.dart';
 /// runtime image holds the binary and nothing else. The build context is the
 /// directory of the service.
 ///
-/// An app serves the files of the frontend, so the image of an app holds them
-/// as well: the files are copied into the image and the variable
-/// `LASKA_WEB_ROOT` points at them.
+/// The [entrypoint] is the Dart file of the service inside the build context.
+///
+/// The runtime image holds the files of the service that are not code: the SQL
+/// migrations of a service and the frontend of an app. The image works in the
+/// directory of the service, so the relative paths of the runtime find them.
 String renderDockerfile(
   WorkspaceService service, {
   String image = 'laska',
+  String entrypoint = 'bin/server.dart',
+  bool hasMigrations = false,
 }) {
   final frontend = service.kind == WorkspaceServiceKind.app
       ? '''
 # The app serves the files of the frontend, so they are part of the image.
 COPY --from=build /app/web /app/web
 ENV LASKA_WEB_ROOT=/app/web
+'''
+      : '';
+
+  final migrations = hasMigrations
+      ? '''
+# The migrations are read at the start of the service, so they are part of the
+# image.
+COPY --from=build /app/migrations /app/migrations
 '''
       : '';
 
@@ -42,12 +54,14 @@ COPY pubspec.yaml pubspec.lock ./
 RUN dart pub get
 
 COPY . .
-RUN dart compile exe bin/server.dart -o /app/server
+RUN dart compile exe $entrypoint -o /app/server
 
 FROM scratch
 COPY --from=build /runtime/ /
 COPY --from=build /app/server /app/server
-$frontend
+$migrations$frontend
+# The service reads the files of its own directory, so it runs in it.
+WORKDIR /app
 EXPOSE ${service.port}
 ENTRYPOINT ["/app/server"]
 ''';
@@ -110,19 +124,35 @@ spec:
 ///
 /// The files are written in `<output>/<name>/Dockerfile`, one directory per
 /// service. Returns the paths of the written files.
+///
+/// The [root] is the directory of the manifest of the workspace: the paths of
+/// the entrypoints of the services are read against it.
 Future<List<String>> writeDockerfiles(
   Workspace workspace, {
   required String output,
   String image = 'laska',
+  String? root,
 }) async {
   final written = <String>[];
+  final base = root ?? Directory.current.path;
 
   for (final service in workspace.services) {
     final directory = Directory('$output/${service.name}');
     await directory.create(recursive: true);
 
+    final entrypoint = File('$base/${service.entrypoint}').absolute.path;
+    final package =
+        workingDirectoryOf(entrypoint) ?? File(entrypoint).parent.parent.path;
+
     final dockerfile = File('${directory.path}/Dockerfile');
-    await dockerfile.writeAsString(renderDockerfile(service, image: image));
+    await dockerfile.writeAsString(
+      renderDockerfile(
+        service,
+        image: image,
+        entrypoint: relativePath(package, entrypoint),
+        hasMigrations: Directory('$package/migrations').existsSync(),
+      ),
+    );
     written.add(dockerfile.path);
 
     final ignore = File('${directory.path}/.dockerignore');

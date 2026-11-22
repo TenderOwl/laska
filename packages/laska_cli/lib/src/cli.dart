@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:laska_cli/src/app_scaffold.dart';
+import 'package:laska_cli/src/build.dart';
 import 'package:laska_cli/src/ci.dart';
 import 'package:laska_cli/src/collector.dart';
 import 'package:laska_cli/src/deploy.dart';
@@ -110,6 +111,8 @@ class _Cli {
         await _migrate(command);
       case 'dev':
         await _dev(command);
+      case 'build':
+        await _build(command);
       case 'new':
         await _new(command, help);
       case 'deploy:dockerfile':
@@ -546,6 +549,54 @@ class _Cli {
     }
   }
 
+  /// Compiles the service into a single binary.
+  ///
+  /// The binary holds the runtime, the service and its dependencies, so it
+  /// runs on a machine with no Dart SDK on it.
+  Future<void> _build(ArgResults options) async {
+    final BuildPlan plan;
+    try {
+      plan = planOfBuild(
+        Directory(options.option('path')!),
+        entrypoint: options.option('entrypoint'),
+        output: options.option('out'),
+      );
+    } on BuildException catch (error) {
+      err.writeln(error.message);
+      code = 66;
+      return;
+    }
+
+    // The compiler resolves the packages of the service, so the configuration
+    // of the packages has to be there before the service is compiled.
+    final package = workingDirectoryOf(
+      plan.entrypoint,
+      fallback: plan.workingDirectory,
+    );
+    if (!File('$package/.dart_tool/package_config.json').existsSync()) {
+      final problem = await _resolveDependencies(plan.entrypoint);
+      if (problem != null) {
+        err.writeln(problem);
+        code = 65;
+        return;
+      }
+    }
+
+    final BuildResult result;
+    try {
+      result = await compileService(
+        plan,
+        dartExecutable: options.option('dart'),
+      );
+    } on BuildException catch (error) {
+      err.writeln(error.message);
+      code = 65;
+      return;
+    }
+
+    out.writeln('compiled: ${result.output} (${result.readableSize})');
+  }
+
   /// Writes the Dockerfile of every service of the workspace.
   Future<void> _dockerfile(ArgResults options) async {
     final workspace = _readManifest(options.option('manifest')!);
@@ -557,6 +608,7 @@ class _Cli {
       workspace,
       output: options.option('out')!,
       image: options.option('image')!,
+      root: File(options.option('manifest')!).parent.path,
     );
 
     for (final path in written) {
@@ -1136,8 +1188,12 @@ class _Cli {
       return null;
     }
 
+    // The SDK of the path is used when the CLI is a compiled binary: the
+    // process itself is the CLI then, and it does not resolve the packages.
+    final dart = findDartExecutable() ?? Platform.resolvedExecutable;
+
     final result = await Process.run(
-      Platform.resolvedExecutable,
+      dart,
       <String>['pub', 'get'],
       workingDirectory: directory,
     );

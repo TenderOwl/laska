@@ -640,7 +640,7 @@ laska route:list          # dump the route table                      [done]
 laska migrate:make <name> # scaffold a SQL migration
 laska migrate:run|status|rollback                                     [run done]
 laska db:seed
-laska build               # AOT compile
+laska build               # AOT compile                                               [done]
 laska deploy:dockerfile   # the images of the services of the workspace     [done]
 laska deploy:k8s          # the manifests of the services of the workspace  [done]
 laska ci:recipe           # the recipe of the continuous integration        [done]

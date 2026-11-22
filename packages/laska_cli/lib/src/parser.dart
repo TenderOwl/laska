@@ -196,6 +196,28 @@ ArgParser buildParser() {
     );
   addHelpFlag(dev);
 
+  final build = parser.addCommand('build')
+    ..addOption(
+      'entrypoint',
+      help: 'Dart file of the service. Defaults to bin/server.dart.',
+    )
+    ..addOption(
+      'out',
+      help: 'Path of the binary. Defaults to the build directory of the '
+          'package.',
+    )
+    ..addOption(
+      'path',
+      help: 'Directory of the service. Defaults to the current one.',
+      defaultsTo: '.',
+    )
+    ..addOption(
+      'dart',
+      help: 'Path of the Dart SDK that compiles the service. Defaults to the '
+          'SDK of the process, and to the SDK of the path.',
+    );
+  addHelpFlag(build);
+
   final dockerfile = parser.addCommand('deploy:dockerfile')
     ..addOption(
       'manifest',

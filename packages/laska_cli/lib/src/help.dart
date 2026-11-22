@@ -153,6 +153,21 @@ const Map<String, CommandHelp> commandHelp = <String, CommandHelp>{
       'laska new shop',
     ],
   ),
+  'build': CommandHelp(
+    summary: 'Compile a service into a single binary.',
+    description:
+        'The Dart SDK compiles the service into a native binary: the binary '
+        'holds the runtime, the service and its dependencies, and it runs on a '
+        'machine with no Dart SDK on it. The binary is written to the build '
+        'directory of the package, and the name of the package is the name of '
+        'the binary. The files of the service are not part of the binary: the '
+        'frontend of an app and the SQL migrations of a service travel next to '
+        'it.',
+    examples: <String>[
+      'laska build',
+      'laska build --entrypoint bin/server.dart --out build/users',
+    ],
+  ),
   'deploy:dockerfile': CommandHelp(
     summary: 'Write the Dockerfile of every service of the workspace.',
     description:
@@ -429,6 +444,7 @@ class LaskaHelp {
         'laska contract diff --base api-v1 --candidate api-v2',
         'laska route:list --entrypoint bin/server.dart',
         'laska migrate:run --entrypoint bin/server.dart',
+        'laska build',
         'laska dev',
       ];
 

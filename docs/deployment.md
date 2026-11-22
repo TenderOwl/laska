@@ -47,6 +47,44 @@ $ docker build -f ../deploy/users/Dockerfile -t laska/users:latest .
 > workspace in the build context. A service that depends on the published
 > packages needs nothing else.
 
+The image holds the files of the service that are not code: the SQL migrations
+of the service and the frontend of an app. The service runs in the directory
+of the image, so the relative paths of the runtime find them.
+
+## One binary
+
+The image is not the only way to ship a service. The Dart SDK compiles a
+service into a native binary, and the binary holds the runtime, the service and
+its dependencies:
+
+```console
+$ cd users
+$ dart run laska_cli:laska build
+compiled: build/users_service.exe (8.4 MB)
+```
+
+The binary runs on a machine with no Dart SDK on it:
+
+```console
+$ ./build/users_service
+=> Laska listening on http://0.0.0.0:8080
+```
+
+The name of the binary is the name of the package, and it is written to the
+`build` directory of the package. The options name the pieces of it:
+
+```console
+$ dart run laska_cli:laska build --entrypoint bin/server.dart --out build/users
+```
+
+The files of the service are not part of the binary: the frontend of an app and
+the SQL migrations of a service travel next to it, and the variables
+`LASKA_WEB_ROOT` and `LASKA_MIGRATIONS_DIRECTORY` point at them.
+
+> A compiled binary does not know the package it belongs to, so the runtime
+> cannot find the files of the package by itself: it reads them against the
+> directory the process runs in, or against the variables that name them.
+
 ## The cluster
 
 ```console

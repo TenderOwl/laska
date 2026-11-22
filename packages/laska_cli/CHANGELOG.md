@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- `laska build` compiles a service into a single native binary: the binary
+  holds the runtime, the service and its dependencies, and it runs on a machine
+  with no Dart SDK on it. The binary is written to the `build` directory of the
+  package, and the name of the package is the name of the binary. The option
+  `--out` names the binary, `--entrypoint` names the Dart file of the service
+  and `--path` names the directory of the package.
+- The image of a service holds the SQL migrations of the service and runs in
+  the directory of the service, so the relative paths of the runtime find the
+  files of the service. The image compiles the entrypoint the manifest of the
+  workspace names, and not always `bin/server.dart`.
+
 ## 0.3.0
 
 - `laska new app <name>` writes the app of a workspace: the service that

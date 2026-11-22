@@ -73,6 +73,57 @@ services:
       expect(result.code, 66);
       expect(result.err, contains('does not exist'));
     });
+
+    test('copies the migrations of a service into the image', () async {
+      Directory('${workspace.path}/services/users/migrations')
+          .createSync(recursive: true);
+      File('${workspace.path}/services/users/migrations/001_init.sql')
+          .writeAsStringSync('CREATE TABLE users (id TEXT);');
+
+      final result = await _run(<String>[
+        'deploy:dockerfile',
+        '--manifest',
+        '${workspace.path}/laska.yaml',
+        '--out',
+        '${workspace.path}/deploy',
+      ]);
+
+      expect(result.code, 0);
+
+      final users =
+          File('${workspace.path}/deploy/users/Dockerfile').readAsStringSync();
+      expect(
+          users, contains('COPY --from=build /app/migrations /app/migrations'));
+
+      final orders =
+          File('${workspace.path}/deploy/orders/Dockerfile').readAsStringSync();
+      expect(orders, isNot(contains('/app/migrations')));
+    });
+
+    test('compiles the entrypoint the manifest names', () async {
+      File('${workspace.path}/laska.yaml').writeAsStringSync('''
+services:
+  - name: users
+    entrypoint: services/users/bin/main.dart
+    port: 8080
+''');
+
+      final result = await _run(<String>[
+        'deploy:dockerfile',
+        '--manifest',
+        '${workspace.path}/laska.yaml',
+        '--out',
+        '${workspace.path}/deploy',
+      ]);
+
+      expect(result.code, 0);
+
+      final dockerfile = File('${workspace.path}/deploy/users/Dockerfile');
+      expect(
+        dockerfile.readAsStringSync(),
+        contains('dart compile exe bin/main.dart'),
+      );
+    });
   });
 
   group('laska deploy:k8s', () {
@@ -130,6 +181,46 @@ services:
 
       expect(content, contains('FROM scratch'));
       expect(content, contains('ENTRYPOINT ["/app/server"]'));
+    });
+
+    test('runs the service in the directory of the image', () {
+      final content = renderDockerfile(
+        const WorkspaceService(
+          name: 'users',
+          entrypoint: 'bin/server.dart',
+          port: 8080,
+        ),
+      );
+
+      expect(content, contains('WORKDIR /app'));
+    });
+
+    test('holds the migrations of the service', () {
+      final content = renderDockerfile(
+        const WorkspaceService(
+          name: 'users',
+          entrypoint: 'bin/server.dart',
+          port: 8080,
+        ),
+        hasMigrations: true,
+      );
+
+      expect(
+        content,
+        contains('COPY --from=build /app/migrations /app/migrations'),
+      );
+    });
+
+    test('holds no migrations when the service has none', () {
+      final content = renderDockerfile(
+        const WorkspaceService(
+          name: 'users',
+          entrypoint: 'bin/server.dart',
+          port: 8080,
+        ),
+      );
+
+      expect(content, isNot(contains('/app/migrations')));
     });
   });
 }
