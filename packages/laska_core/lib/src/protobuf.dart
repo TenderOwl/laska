@@ -398,7 +398,10 @@ class ProtoReader {
       case WireType.fixed64:
         _pos += 8;
       case WireType.lengthDelimited:
-        _pos += _readVarint();
+        // The length of the field is read before the position is moved, so the
+        // bytes of the field are skipped as a whole.
+        final length = _readVarint();
+        _pos = _pos + length;
       case WireType.fixed32:
         _pos += 4;
       default:

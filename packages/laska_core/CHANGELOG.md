@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The reader of the protocol buffers skips a field of bytes as a whole. A
+  message that holds a field the reader does not know was read wrong before:
+  the bytes of the field were not skipped, and the fields after it were read
+  from the wrong place.
+
 ## 0.3.0
 
 - The runtime knows the directory of a package: `packageDirectory(uri)` gives

@@ -106,6 +106,28 @@ void main() {
       expect(fields[2], 'world');
     });
 
+    test('skips a field of bytes it does not know', () {
+      final writer = ProtoWriter()
+        ..writeString(1, 'hello')
+        ..writeBytes(9, <int>[1, 2, 3, 4, 5])
+        ..writeString(2, 'world');
+
+      final reader = ProtoReader(writer.toBytes());
+      final fields = <int, String>{};
+
+      while (reader.hasNext) {
+        final tag = reader.readTag();
+        if (tag == 1 || tag == 2) {
+          fields[tag] = reader.readString();
+        } else {
+          reader.skipField();
+        }
+      }
+
+      expect(fields[1], 'hello');
+      expect(fields[2], 'world');
+    });
+
     test('reads a repeated field that is packed', () {
       final packed = ProtoWriter()..writeString(1, 'a');
       final payload = <int>[];
