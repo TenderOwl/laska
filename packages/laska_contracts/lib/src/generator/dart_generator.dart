@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:dart_style/dart_style.dart';
 import 'package:pub_semver/pub_semver.dart';
 
+import '../descriptor.dart';
 import '../model.dart';
 import '../naming.dart';
 import '../types.dart';
@@ -125,6 +128,11 @@ class DartGenerator {
       writer.blank();
     }
 
+    if (services.isNotEmpty) {
+      _writeDescriptor(writer, file);
+      writer.blank();
+    }
+
     if (messages.isNotEmpty) {
       writer.write('// Messages');
       writer.blank();
@@ -141,7 +149,7 @@ class DartGenerator {
       _writeServiceInterface(writer, service);
       writer.blank();
       if (service.methods.isNotEmpty) {
-        _writeRegister(writer, service);
+        _writeRegister(writer, service, file);
         writer.blank();
       }
       if (_hasPolicies(service)) {
@@ -1443,7 +1451,7 @@ class DartGenerator {
   ///
   /// The service is registered over HTTP and over gRPC, so the contract of
   /// the service is served on both transports.
-  void _writeRegister(_Writer writer, Service service) {
+  void _writeRegister(_Writer writer, Service service, ProtoFile file) {
     final name = pascalCase(service.name);
     writer.write('/// Registers the projections of [service] on [app].');
     writer.write('///');
@@ -1482,6 +1490,7 @@ class DartGenerator {
     writer.dedent();
     writer.write('},');
     writer.write('middleware: middleware,');
+    writer.write('descriptor: descriptorBytes(${_descriptorNameOf(file)}),');
     writer.dedent();
     writer.write('),');
     writer.dedent();
@@ -1492,6 +1501,42 @@ class DartGenerator {
     writer.dedent();
     writer.dedent();
     writer.write('}');
+  }
+
+  /// Writes the descriptor of the file [file].
+  ///
+  /// The descriptor travels with the generated code, so the service of the
+  /// reflection of gRPC describes the services of the contract without the
+  /// files of the contract on the machine of the server.
+  void _writeDescriptor(_Writer writer, ProtoFile file) {
+    final name = _descriptorNameOf(file);
+    final descriptor = base64Encode(descriptorOfFile(contract, file));
+
+    writer.write('// Descriptor');
+    writer.blank();
+    writer.write('/// The descriptor of the contract of this file, in the');
+    writer.write('/// format of the protocol buffers.');
+    writer.write('///');
+    writer.write('/// The service of the reflection of gRPC serves it, so a');
+    writer.write('/// tool of the ecosystem discovers the methods of the');
+    writer.write('/// service without the files of the contract.');
+    writer.write('const String $name =');
+    writer.write("  '$descriptor';");
+  }
+
+  /// The name of the constant that holds the descriptor of the file [file].
+  ///
+  /// The name is built out of the path of the file, so two files of a
+  /// contract never share it.
+  String _descriptorNameOf(ProtoFile file) {
+    final withoutExtension = file.path.replaceAll(RegExp(r'\.proto$'), '');
+    final parts = withoutExtension
+        .split('/')
+        .where((part) => part.isNotEmpty)
+        .map(camelCase)
+        .toList();
+    final name = parts.isEmpty ? 'contract' : parts.join();
+    return '${name}Descriptor';
   }
 
   /// Writes the handler of a method of the service over gRPC.

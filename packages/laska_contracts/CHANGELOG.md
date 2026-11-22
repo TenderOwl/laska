@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- The compiler writes the descriptor of a contract into the generated code: the
+  bytes of the `FileDescriptorSet` of the protocol buffers travel with the
+  file of the contract, and the service of the reflection of gRPC serves them.
+  A tool of the ecosystem — `grpcurl`, a client of another language —
+  discovers the methods of a running service without the files of the contract
+  on its machine.
+- The descriptor holds the structure of the contract: the messages, the fields
+  with their numbers and their labels, the enums, the groups of a `oneof`, the
+  maps with their entries and the services with their methods. The files the
+  contract depends on are part of it too, so a reader of it resolves every type
+  of the contract.
+
 ## 0.3.0
 
 - Every method of the generated client takes the headers of the call:

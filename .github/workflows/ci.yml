@@ -23,6 +23,15 @@ jobs:
         with:
           go-version: '1.24'
 
+      # The tool of the ecosystem that reads the reflection of a gRPC server.
+      # The test of the reflection calls it, so the reflection is checked
+      # against a tool of the ecosystem and not only against the runtime.
+      - name: Install grpcurl
+        shell: bash
+        run: |
+          go install github.com/fullstorydev/grpcurl/cmd/grpcurl@v1.9.4
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
       - name: Resolve dependencies
         run: dart pub get
 

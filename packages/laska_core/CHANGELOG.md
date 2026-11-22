@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- The gRPC server serves the reflection of the protocol: the service
+  `grpc.reflection.v1.ServerReflection` and the service
+  `grpc.reflection.v1alpha.ServerReflection` tell a tool of the ecosystem —
+  `grpcurl`, a client of another language — which methods a running server
+  serves. The reflection is on by default, and a server that does not want to
+  be described turns it off: `serveGrpc(app, reflection: false)`.
+- A service of a contract carries the descriptor of the contract: the bytes of
+  the `FileDescriptorSet` of the protocol buffers that the generated code
+  holds. The service of the reflection serves them, so a tool discovers the
+  methods of the service and the types of their messages without the files of
+  the contract.
 - The reader of the protocol buffers skips a field of bytes as a whole. A
   message that holds a field the reader does not know was read wrong before:
   the bytes of the field were not skipped, and the fields after it were read

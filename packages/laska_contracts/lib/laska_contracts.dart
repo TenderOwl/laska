@@ -8,6 +8,7 @@ library;
 
 export 'src/compatibility.dart';
 export 'src/compile.dart';
+export 'src/descriptor.dart';
 export 'src/diff.dart';
 export 'src/generator/dart_generator.dart';
 export 'src/generator/file.dart';

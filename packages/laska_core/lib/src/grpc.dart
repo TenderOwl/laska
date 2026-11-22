@@ -13,6 +13,7 @@ import 'package:grpc/grpc.dart' as grpc;
 
 import 'app.dart';
 import 'errors.dart';
+import 'grpc_reflection.dart';
 import 'middleware.dart';
 import 'request.dart';
 import 'resilience/status.dart';
@@ -34,6 +35,7 @@ class GrpcService {
     required this.name,
     required this.methods,
     this.middleware = const <Middleware>[],
+    this.descriptor,
   });
 
   /// The full name of the service, e.g. `users.v1.UsersService`.
@@ -52,6 +54,17 @@ class GrpcService {
   /// It is the middleware of the route of the method over HTTP, so a service
   /// is protected the same way on both transports.
   final List<Middleware> middleware;
+
+  /// The descriptor of the contract of the service.
+  ///
+  /// The descriptor is the `FileDescriptorSet` of the protocol buffers: the
+  /// bytes that describe the files of the contract. The service of the
+  /// reflection of gRPC serves it, so a tool discovers the methods of the
+  /// service without the files of the contract.
+  ///
+  /// The value is `null` when the service was written by hand and carries no
+  /// contract: the service is served, but a tool cannot describe it.
+  final List<int>? descriptor;
 
   Laska? _app;
 
@@ -97,11 +110,16 @@ class GrpcServiceRegistry {
 /// contract it answers over HTTP.
 class GrpcServer {
   /// Creates a server for the services registered on [app].
+  ///
+  /// The [reflection] tells whether the server serves the service of the
+  /// reflection of gRPC: it is on by default, so a tool of the ecosystem
+  /// discovers the methods of the services of the server.
   GrpcServer(
     this.app, {
     this.address = '0.0.0.0',
     int port = 50051,
     this.credentials,
+    this.reflection = true,
   }) : _port = port;
 
   /// The application whose services are served.
@@ -115,6 +133,13 @@ class GrpcServer {
 
   /// The credentials of the server, `null` for an insecure server.
   final grpc.ServerCredentials? credentials;
+
+  /// Whether the server serves the service of the reflection of gRPC.
+  ///
+  /// The service of the reflection tells a tool — `grpcurl`, a client of
+  /// another language — which methods a running server serves. A server that
+  /// does not want to be described turns it off.
+  final bool reflection;
 
   grpc.Server? _server;
   int _calls = 0;
@@ -139,11 +164,22 @@ class GrpcServer {
     if (_server != null) {
       return;
     }
-    final server = _LaskaGrpcServer(
-      services: <grpc.Service>[
-        for (final service in services) _ServiceAdapter(service, this),
-      ],
-    );
+    final contractServices = services;
+    final served = <grpc.Service>[
+      for (final service in contractServices) _ServiceAdapter(service, this),
+    ];
+
+    if (reflection) {
+      // The service of the reflection is served under both names of the
+      // protocol: the tools of the ecosystem speak one of them.
+      final index = GrpcReflectionIndex(contractServices);
+      served.add(GrpcReflectionService(index));
+      served.add(
+        GrpcReflectionService(index, serviceName: reflectionServiceV1Alpha),
+      );
+    }
+
+    final server = _LaskaGrpcServer(services: served);
     await server.serve(address: address, port: port, security: credentials);
     _server = server;
   }
@@ -401,17 +437,21 @@ class _ServiceAdapter extends grpc.Service {
 ///
 /// The services are the ones the generated code registered on the
 /// application, so a service speaks its contract over gRPC without any extra
-/// wiring. The server is not stopped when the process ends: the caller owns
-/// it and stops it with [GrpcServer.stop].
+/// wiring. The server serves the service of the reflection of gRPC too, so a
+/// tool of the ecosystem discovers the methods of the services. The server is
+/// not stopped when the process ends: the caller owns it and stops it with
+/// [GrpcServer.stop].
 Future<GrpcServer> serveGrpc(
   Laska app, {
   Object address = '0.0.0.0',
   int port = 50051,
+  bool reflection = true,
 }) async {
   final server = GrpcServer(
     app,
     address: address is String ? address : address.toString(),
     port: port,
+    reflection: reflection,
   );
   await server.start();
   return server;

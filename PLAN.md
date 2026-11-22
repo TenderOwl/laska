@@ -600,6 +600,10 @@ was started in.
   the pure-Dart protobuf codec (`ProtoWriter`/`ProtoReader`) and the `Request.idempotencyKey`. The
   gRPC transport sends the headers of a request as the metadata of the call, so the middleware of
   the service reads them the same way over both transports.
+- The gRPC server serves the reflection of the protocol (`grpc.reflection.v1.ServerReflection` and
+  the version 1alpha of it): a service of a contract carries the descriptor of the contract, and a
+  tool of the ecosystem — `grpcurl`, a client of another language — discovers the methods of a
+  running service without the files of the contract.
 
 *Planned:*
 
@@ -934,8 +938,9 @@ service, and the release hardening closed the gaps a v1.0 cannot have.
    same contract, so the clients of a service agree with each other by construction.
 3. **The gRPC server of the contract is done** — the runtime serves the methods of a contract under
    the name of the contract, and the generated code registers the service over gRPC next to its REST
-   projection. What is left is the reflection of the server, so a tool of the ecosystem discovers
-   the methods of a running service.
+   projection. The reflection of the server is done too: the descriptor of the contract travels
+   with the generated code, and the service of the reflection of the protocol serves it, so a tool
+   of the ecosystem discovers the methods of a running service. The guide is `docs/contracts.md`.
 4. **The frontend of the workspace** — a service may carry the frontend of the workspace, and the
    runtime serves the files of a directory and answers with HTML (§4.14). The runtime is done, the
    headers of a call in the generated Dart client are done, and the app of the workspace is done:

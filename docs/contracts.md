@@ -390,6 +390,51 @@ A service that does not want to answer over gRPC says so:
 registerUsersService(app, UsersServiceImpl(), grpc: false);
 ```
 
+## The reflection of the gRPC server
+
+A running service tells what it serves. The gRPC server answers the service of
+the reflection of the protocol — the version 1 and the version 1alpha — so a
+tool of the ecosystem discovers the methods of the service without the files of
+the contract on its machine:
+
+```console
+$ grpcurl -plaintext 127.0.0.1:50051 list
+users.v1.UsersService
+
+$ grpcurl -plaintext 127.0.0.1:50051 describe users.v1.UsersService
+{
+  "name": "UsersService",
+  "methods": [ ... ]
+}
+
+$ grpcurl -plaintext -d '{"id":"u_1"}' 127.0.0.1:50051 \
+    users.v1.UsersService.GetUser
+{
+  "id": "u_1",
+  "email": "ada@example.com",
+  "displayName": "Ada Lovelace"
+}
+```
+
+The reflection is on by default: the server of the runtime serves it next to
+the services of the contracts. A server that does not want to be described
+turns it off:
+
+```dart
+final server = await serveGrpc(app, reflection: false);
+```
+
+The descriptor of a contract travels with the generated code: the compiler puts
+the bytes of the `FileDescriptorSet` of the protocol buffers into the generated
+file, and the service of the reflection serves them. The descriptor holds the
+structure of the contract — the messages, the fields, the enums, the groups of
+a `oneof`, the services and their methods — and the files the contract
+depends on, so a reader of it resolves every type of the contract.
+
+The options of the framework are not part of the descriptor: the binding of a
+method over HTTP and the policy of a call are read by the framework as the text
+of the contract, and a tool that discovers the schema does not need them.
+
 ## The SDK of the contract in another language
 
 A contract is not only a service of Dart: it is the contract of every service

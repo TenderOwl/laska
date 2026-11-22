@@ -8,6 +8,17 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:laska_core/laska_core.dart';
 
+// Descriptor
+
+/// The descriptor of the contract of this file, in the
+/// format of the protocol buffers.
+///
+/// The service of the reflection of gRPC serves it, so a
+/// tool of the ecosystem discovers the methods of the
+/// service without the files of the contract.
+const String shopGatewayDescriptor =
+    'CugBChJzaG9wX2dhdGV3YXkucHJvdG8SD3Nob3BfZ2F0ZXdheS52MSIkChJHZXRTaG9wVmlld1JlcXVlc3QSDgoCaWQYASABKAlSAmlkIi4KCFNob3BWaWV3Eg4KAmlkGAEgASgJUgJpZBISCgRuYW1lGAIgASgJUgRuYW1lMmMKElNob3BHYXRld2F5U2VydmljZRJNCgtHZXRTaG9wVmlldxIjLnNob3BfZ2F0ZXdheS52MS5HZXRTaG9wVmlld1JlcXVlc3QaGS5zaG9wX2dhdGV3YXkudjEuU2hvcFZpZXdiBnByb3RvMw==';
+
 // Messages
 
 /// Request of the GetShopView method.
@@ -182,6 +193,7 @@ void registerShopGatewayService(
           },
         },
         middleware: middleware,
+        descriptor: descriptorBytes(shopGatewayDescriptor),
       ),
     );
   }
