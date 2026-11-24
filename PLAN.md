@@ -587,6 +587,13 @@ was started in.
 - `Logger` — structured JSON output, levels, secret redaction, `service`/`version` fields.
 - Middleware: explicit order, named aliases, and the built-in set (request id, request logging,
   CORS, security headers).
+- Authentication and the limits of the callers: the JWT (`JwtSigner`, `JwtVerifier`, the
+  `JwtKeySource` and the `JwksCache`), the session cookies (`Session`, `SessionStore` and the
+  `MemorySessionStore`) and the API keys (`ApiKey`, `ApiKeyGuard`) come as the middleware
+  `jwtMiddleware`, `sessionMiddleware` and `apiKeyMiddleware`; the caller lands in
+  `ctx.request.principal`, and `requireScope` / `requireSession` narrow the routes. The
+  `RateLimiter` and `rateLimitMiddleware` answer `429` with a `retry-after`. The guide is
+  `docs/auth.md`.
 - `LaskaServer` — `dart:io` server with an in-flight drain and a graceful `stop()`.
 - `Supervisor` — worker processes on a shared port, restart of crashed workers, graceful stop.
 - `Database` over `package:postgres` and `package:sqlite3`, plus the SQL migration runner.
@@ -617,8 +624,8 @@ was started in.
 
 *Planned:*
 
-- `singleton`/`bind` DI, auth (JWT, session cookies, API keys), rate limiting, streaming responses,
-  WebSocket upgrades, `package:http_parser` for multipart uploads.
+- `singleton`/`bind` DI, streaming responses, WebSocket upgrades, `package:http_parser` for
+  multipart uploads.
 
 ### 5.2 `laska_contracts`
 
