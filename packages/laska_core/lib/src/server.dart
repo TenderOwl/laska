@@ -6,6 +6,7 @@ import 'app.dart';
 import 'buffers.dart';
 import 'db/migrations.dart';
 import 'grpc.dart';
+import 'lifecycle.dart';
 import 'request.dart';
 import 'supervisor.dart';
 
@@ -68,7 +69,13 @@ class LaskaServer {
   int get inFlight => _inFlight;
 
   /// Starts listening.
+  ///
+  /// The hooks of the start phase run before the port is bound, so a service
+  /// acquires its resources before it accepts traffic. A hook that throws
+  /// keeps the server from starting.
   Future<HttpServer> start() async {
+    await _runHooks(LifecyclePhase.start);
+
     final server = await HttpServer.bind(
       options.address,
       options.port,
@@ -83,11 +90,21 @@ class LaskaServer {
     return server;
   }
 
+  /// Announces that the service is ready.
+  ///
+  /// The hooks of the ready phase run here: the port is bound and the gRPC
+  /// server of the service is up, so the service answers the traffic.
+  Future<void> ready() async {
+    await _runHooks(LifecyclePhase.ready);
+  }
+
   /// Stops the server.
   ///
   /// The server stops accepting new connections, waits for the running
   /// requests to finish — at most [ServeOptions.drainTimeout] — and closes the
-  /// socket afterwards.
+  /// socket afterwards. The hooks of the shutdown phase run after the drain,
+  /// so the resources they release are still alive while the last answers are
+  /// written.
   Future<void> stop() async {
     final server = _server;
     if (server == null || _closing) {
@@ -110,7 +127,31 @@ class LaskaServer {
       options.drainTimeout,
       onTimeout: () {},
     );
+
+    await _runHooks(LifecyclePhase.shutdown);
+
     _server = null;
+  }
+
+  /// Runs the hooks of [phase] of the application and of its groups.
+  Future<void> _runHooks(LifecyclePhase phase) async {
+    for (final application in app.lifecycleTree) {
+      await application.lifecycle.run(
+        phase,
+        onError: phase == LifecyclePhase.shutdown ? _reportHookError : null,
+      );
+    }
+  }
+
+  /// Reports a hook that failed.
+  ///
+  /// A resource that fails to close must not keep the other resources open,
+  /// so the error of a shutdown hook is written and the next hook runs.
+  void _reportHookError(Object error, StackTrace stackTrace) {
+    app.logger.error(
+      'the hook of the shutdown phase failed',
+      <String, Object?>{'error': error.toString(), 'stack': '$stackTrace'},
+    );
   }
 
   Future<void> _handle(HttpRequest httpRequest) async {
@@ -205,7 +246,13 @@ Future<HttpServer> serve(
       shared: shared,
     ),
   );
-  return server.start();
+  await server.start();
+  await server.ready();
+  final httpServer = server.server;
+  if (httpServer == null) {
+    throw StateError('The server of the application did not start.');
+  }
+  return httpServer;
 }
 
 /// Starts an HTTP server for [app] and returns it.
@@ -277,6 +324,8 @@ Future<HttpServer> run(
   }
 
   _installSignalHandlers(server, grpcServer);
+
+  await server.ready();
 
   stdout.writeln(
     '=> Laska listening on http://${httpServer.address.host}:${httpServer.port}',

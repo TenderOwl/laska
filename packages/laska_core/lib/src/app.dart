@@ -1,6 +1,8 @@
+import 'cache.dart';
 import 'db/database.dart';
 import 'dispatcher.dart';
 import 'grpc.dart';
+import 'lifecycle.dart';
 import 'logger.dart';
 import 'middleware.dart';
 import 'response.dart';
@@ -67,6 +69,38 @@ class Laska {
   /// The directory holding the migration files.
   String migrationsDirectory = 'migrations';
 
+  /// The hooks of the lifecycle of the application.
+  ///
+  /// The server calls them: the hooks of the start phase run before the port
+  /// is bound, the hooks of the ready phase run when the service answers and
+  /// the hooks of the shutdown phase run after the requests in flight
+  /// finished.
+  final Lifecycle lifecycle = Lifecycle();
+
+  Cache? _cache;
+
+  /// The cache of the service.
+  ///
+  /// A group inherits the cache of its parent, so a service sets the cache
+  /// once on the root application and every group of it uses the same cache.
+  Cache get cache {
+    final own = _cache;
+    if (own != null) {
+      return own;
+    }
+    final inherited = parent?.cache;
+    if (inherited != null) {
+      return inherited;
+    }
+    final created = Cache.memory();
+    _cache = created;
+    return created;
+  }
+
+  set cache(Cache value) {
+    _cache = value;
+  }
+
   final String _prefix;
 
   late final Dispatcher _dispatcher = Dispatcher(this);
@@ -86,6 +120,45 @@ class Laska {
   /// Registers a named middleware, so routes can refer to it by name.
   void alias(String name, Middleware middleware) {
     aliases[name] = middleware;
+  }
+
+  /// Registers a hook that runs when the application starts.
+  ///
+  /// The hook runs before the server binds the port, so it is the place to
+  /// acquire the resources of the service: the pool of the database, the
+  /// client of another service, the cache that is warmed with the values the
+  /// service needs. A hook that throws keeps the service from starting.
+  void onStart(LifecycleHook hook) {
+    lifecycle.add(LifecyclePhase.start, hook);
+  }
+
+  /// Registers a hook that runs when the application is ready.
+  ///
+  /// The hook runs when the port is bound and the gRPC server of the service
+  /// is up, so it is the place to announce the readiness of the service — to
+  /// the supervisor, to a health probe or to the log.
+  void onReady(LifecycleHook hook) {
+    lifecycle.add(LifecyclePhase.ready, hook);
+  }
+
+  /// Registers a hook that runs when the application stops.
+  ///
+  /// The hook runs after the requests in flight finished, so the resources it
+  /// releases are still alive while the last answers are written.
+  void onShutdown(LifecycleHook hook) {
+    lifecycle.add(LifecyclePhase.shutdown, hook);
+  }
+
+  /// The application and its groups, in the order the hooks of the lifecycle
+  /// run.
+  ///
+  /// The application comes first, then its groups in the order they were
+  /// created, and the groups of a group come after it.
+  Iterable<Laska> get lifecycleTree sync* {
+    yield this;
+    for (final group in groups) {
+      yield* group.lifecycleTree;
+    }
   }
 
   /// Registers a `GET` route.
