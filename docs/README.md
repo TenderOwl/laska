@@ -11,6 +11,7 @@ built into the runtime.
 | [Contracts](contracts.md) | The contract format, the policy of the calls, the generated code, the diff and the lint. |
 | [Observability](observability.md) | Traces, metrics, logs and the health probes. |
 | [Resilience](resilience.md) | Timeouts, retries, circuit breaker, bulkhead, idempotency and the outbox. |
+| [The cache of a service](cache.md) | The cache, the store behind it, the hooks of the lifecycle and the fake store of the tests. |
 | [Authentication](auth.md) | The tokens, the JWKS, the API keys, the sessions and the limits of the callers. |
 | [The files and the HTML](static-files.md) | How a service serves the frontend of a workspace and answers with HTML. |
 | [The frontend of a workspace](frontend.md) | The app of a workspace: the scaffold, the manifest and the calls of the frontend. |

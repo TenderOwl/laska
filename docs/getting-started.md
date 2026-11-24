@@ -187,5 +187,7 @@ $ dart test
   probes.
 - [The resilience](resilience.md) — the timeouts, the retries, the breaker and
   the idempotency.
+- [The cache of a service](cache.md) — the cache, the store behind it and the
+  hooks of the lifecycle.
 - [The deployment](deployment.md) — the images, the manifests and the recipe
   of the continuous integration.

@@ -604,12 +604,21 @@ was started in.
   the version 1alpha of it): a service of a contract carries the descriptor of the contract, and a
   tool of the ecosystem — `grpcurl`, a client of another language — discovers the methods of a
   running service without the files of the contract.
+- The cache of the service: `app.cache` is a `Cache` over a `CacheStore`, and the runtime ships
+  `MemoryCacheStore` — the values live in the memory of the worker, they expire after their ttl, and
+  the least recently used value is forgotten when the store grows past its limit. `cache.remember(key,
+  loader)` loads a value once for a burst of calls that miss the cache, so a cold key does not fall
+  over the service that holds it. The store is a seam: a service that needs a shared cache writes its
+  own. The guide is `docs/cache.md`.
+- The lifecycle of the service: `onStart` runs before the port is bound, `onReady` runs when the
+  service answers, and `onShutdown` runs after the requests in flight finished, so the resources it
+  releases are still alive while the last answers are written. The hooks of a group run after the
+  hooks of the application.
 
 *Planned:*
 
-- `singleton`/`bind` DI, lifecycle hooks (`onStart`/`onReady`/`onShutdown`), auth (JWT, session
-  cookies, API keys), rate limiting, streaming responses, WebSocket upgrades, `package:http_parser`
-  for multipart uploads.
+- `singleton`/`bind` DI, auth (JWT, session cookies, API keys), rate limiting, streaming responses,
+  WebSocket upgrades, `package:http_parser` for multipart uploads.
 
 ### 5.2 `laska_contracts`
 

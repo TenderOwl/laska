@@ -444,6 +444,12 @@ app.group('/v1', (group) {
   with a document of HTML. The runtime builds nothing and renders nothing — the application writes
   the HTML and the frontend is built by the toolchain of the application. See
   [the guide of the files](docs/static-files.md).
+- **Cache and lifecycle** — `app.cache` is a cache over a store: the runtime ships a store that
+  keeps the values in the memory of the worker, and `cache.remember(key, loader)` loads a value
+  once for a burst of calls that miss it. `app.onStart`, `app.onReady` and `app.onShutdown` hold
+  the resources of the service: the hooks run before the port is bound, when the service answers
+  and after the requests in flight finished. See
+  [the guide of the cache](docs/cache.md).
 
 ## Authentication
 

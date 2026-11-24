@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- The application holds a cache: `app.cache` is a `Cache` over a `CacheStore`,
+  and the runtime ships `MemoryCacheStore` — the values live in the memory of
+  the worker, they expire after their ttl, and the least recently used value
+  is forgotten when the store grows past its limit. The store is a seam: a
+  service that needs a cache shared by its workers writes its own store.
+- `cache.remember(key, loader)` loads a value once for a burst of calls that
+  miss the cache, so a cold key does not fall over the service that holds it.
+  The error of the loader reaches every caller that waits for it, and the
+  value is not cached.
+- The application holds the hooks of its lifecycle: `onStart` runs before the
+  port is bound, `onReady` runs when the service answers, and `onShutdown` runs
+  after the requests in flight finished — so the resources it releases are
+  still alive while the last answers are written. A hook of the start phase
+  that fails keeps the service from starting; a hook of the shutdown phase
+  that fails is written to the log, and the next hook runs.
 - The gRPC server serves the reflection of the protocol: the service
   `grpc.reflection.v1.ServerReflection` and the service
   `grpc.reflection.v1alpha.ServerReflection` tell a tool of the ecosystem —

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The harness ships a fake cache store: `FakeCacheStore` keeps the values in
+  memory and records the calls of the service — the keys that were read and
+  written, the hits and the misses — so a test asserts what the service
+  cached. The fake fails on demand, so a test covers the service that
+  survives a broken cache.
+
 ## 0.3.0
 
 - The harness is published with the version of the framework, so a project can
